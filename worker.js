@@ -135,6 +135,7 @@ export default {
           method: "POST",
           body: JSON.stringify({
             page_size: pageSize,
+            filter: { property: "Data", date: { is_not_empty: true } },
             sorts: [{ property: "Ordem no feed", direction: "ascending" }]
           })
         });
