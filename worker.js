@@ -86,12 +86,12 @@ export default {
     const headers = {
       "Content-Type": "application/json; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type"
     };
 
     if (request.method === "OPTIONS") return new Response(null, { headers });
-    if (request.method !== "GET") {
+    if (request.method !== "GET" && request.method !== "POST") {
       return Response.json({ ok: false, error: "Método não permitido" }, { status: 405, headers });
     }
     if (!env.NOTION_TOKEN) {
@@ -114,6 +114,49 @@ export default {
     }
 
     try {
+
+      if (url.pathname === "/api/reorder" && request.method === "POST") {
+        if (!env.CONTENT_STUDIO_WRITE_KEY || !env.CONTENT_STUDIO_WRITE_KEY.trim()) {
+          return Response.json({ ok: false, error: "Chave de edição não configurada no Worker" }, { status: 503, headers });
+        }
+        const payload = await request.json();
+        if (typeof payload.key !== "string" || payload.key !== env.CONTENT_STUDIO_WRITE_KEY) {
+          return Response.json({ ok: false, error: "Chave de edição inválida" }, { status: 401, headers });
+        }
+        const orderedIds = payload.orderedIds;
+        if (!Array.isArray(orderedIds) || orderedIds.length < 1 || orderedIds.length > 50 ||
+            orderedIds.some(id => typeof id !== "string") || new Set(orderedIds).size !== orderedIds.length) {
+          return Response.json({ ok: false, error: "Lista de publicações inválida" }, { status: 400, headers });
+        }
+        const current = [];
+        let cursor;
+        let more = true;
+        while (more) {
+          const query = await notionRequest(`/data_sources/${CONTENT_DATA_SOURCE_ID}/query`, {
+            method: "POST",
+            body: JSON.stringify({
+              page_size: 100,
+              ...(cursor ? { start_cursor: cursor } : {}),
+              filter: { property: "Data", date: { is_not_empty: true } }
+            })
+          }, "2025-09-03");
+          current.push(...(query.results || []));
+          more = Boolean(query.has_more);
+          cursor = query.next_cursor || undefined;
+          if (!cursor) more = false;
+        }
+        const validIds = new Set(current.map(page => page.id));
+        if (orderedIds.length !== validIds.size || orderedIds.some(id => !validIds.has(id))) {
+          return Response.json({ ok: false, error: "A lista mudou no Notion. Atualize o feed antes de salvar." }, { status: 409, headers });
+        }
+        for (let i = 0; i < orderedIds.length; i++) {
+          await notionRequest(`/pages/${orderedIds[i]}`, {
+            method: "PATCH",
+            body: JSON.stringify({ properties: { "Ordem no feed": { number: i + 1 } } })
+          });
+        }
+        return Response.json({ ok: true, updated: orderedIds.length }, { headers });
+      }
       if (url.pathname === "/api/health") {
         return Response.json({ ok: true, service: "content-studio-api", notionTokenConfigured: true }, { headers });
       }
