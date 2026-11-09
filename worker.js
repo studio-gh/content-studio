@@ -1,6 +1,6 @@
 const NOTION_VERSION = "2022-06-28";
 
-const CONTENT_DATABASE_ID = "8f372d3b-d2dd-4d92-b3c3-65a176938d14";
+const CONTENT_DATA_SOURCE_ID = "68e086ed-8655-413f-aca0-53fe36ad82e0";
 const PROFILE_DATABASE_ID = "bd79b8d1f3194107bb7a173511604c54";
 
 function getText(property) {
@@ -98,12 +98,12 @@ export default {
       return Response.json({ ok: false, error: "NOTION_TOKEN não configurado" }, { status: 500, headers });
     }
 
-    async function notionRequest(path, options = {}) {
+    async function notionRequest(path, options = {}, apiVersion = NOTION_VERSION) {
       const response = await fetch(`https://api.notion.com/v1${path}`, {
         ...options,
         headers: {
           "Authorization": `Bearer ${env.NOTION_TOKEN}`,
-          "Notion-Version": NOTION_VERSION,
+          "Notion-Version": apiVersion,
           "Content-Type": "application/json",
           ...(options.headers || {})
         }
@@ -131,20 +131,40 @@ export default {
       if (url.pathname === "/api/notion-read-test" || url.pathname === "/api/feed") {
         const requestedLimit = Number(url.searchParams.get("limit") || 50);
         const pageSize = Math.min(50, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 50));
-        const data = await notionRequest(`/databases/${CONTENT_DATABASE_ID}/query`, {
-          method: "POST",
-          body: JSON.stringify({
-            page_size: pageSize,
-            filter: { property: "Data", date: { is_not_empty: true } },
-            sorts: [{ property: "Ordem no feed", direction: "ascending" }]
-          })
-        });
-        const posts = data.results.map(normalizePost);
+        const allResults = [];
+        let startCursor;
+        let hasMore = true;
+
+        while (hasMore && allResults.length < pageSize) {
+          const data = await notionRequest(`/data_sources/${CONTENT_DATA_SOURCE_ID}/query`, {
+            method: "POST",
+            body: JSON.stringify({
+              page_size: Math.min(100, pageSize - allResults.length),
+              ...(startCursor ? { start_cursor: startCursor } : {}),
+              filter: { property: "Data", date: { is_not_empty: true } },
+              sorts: [{ property: "Ordem no feed", direction: "ascending" }]
+            })
+          }, "2025-09-03");
+
+          allResults.push(...(data.results || []));
+          hasMore = Boolean(data.has_more);
+          startCursor = data.next_cursor || undefined;
+          if (!startCursor) hasMore = false;
+        }
+
+        const posts = allResults
+          .map(normalizePost)
+          .sort((a, b) => {
+            const aOrder = a.order == null ? Number.MAX_SAFE_INTEGER : Number(a.order);
+            const bOrder = b.order == null ? Number.MAX_SAFE_INTEGER : Number(b.order);
+            return aOrder - bOrder || String(a.title).localeCompare(String(b.title), "pt-BR");
+          });
+
         return Response.json({
           ok: true,
           total: posts.length,
-          hasMore: data.has_more,
-          nextCursor: data.next_cursor,
+          hasMore,
+          nextCursor: startCursor || null,
           posts
         }, { headers });
       }
