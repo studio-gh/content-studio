@@ -46,7 +46,7 @@ function normalizePost(page) {
     id: page.id,
     title: getText(p["Publicação"]) || "Publicação sem título",
     date: getDate(p["Data"]),
-    order: typeof p["Ordem no feed"]?.number === "number" ? p["Ordem no feed"].number : null,
+    order: null,
     editorial: getText(p["Editoria"]),
     format: getText(p["Formato"]),
     status: getText(p["Status"]),
@@ -185,7 +185,7 @@ export default {
               page_size: Math.min(100, pageSize - allResults.length),
               ...(startCursor ? { start_cursor: startCursor } : {}),
               filter: { property: "Data", date: { is_not_empty: true } },
-              sorts: [{ property: "Ordem no feed", direction: "ascending" }]
+              sorts: [{ property: "Data", direction: "ascending" }, { timestamp: "created_time", direction: "ascending" }]
             })
           }, "2025-09-03");
 
@@ -195,13 +195,7 @@ export default {
           if (!startCursor) hasMore = false;
         }
 
-        const posts = allResults
-          .map(normalizePost)
-          .sort((a, b) => {
-            const aOrder = a.order == null ? Number.MAX_SAFE_INTEGER : Number(a.order);
-            const bOrder = b.order == null ? Number.MAX_SAFE_INTEGER : Number(b.order);
-            return aOrder - bOrder || String(a.title).localeCompare(String(b.title), "pt-BR");
-          });
+        const posts = allResults.map(normalizePost);
 
         return Response.json({
           ok: true,
