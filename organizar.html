@@ -1,45 +1,25 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Content Studio | Organizar feed</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Content Studio | Planeje pelo calendário</title>
 <style>
-:root{--bg:#faf9f6;--paper:#fff;--ink:#292929;--muted:#777;--line:#e7e4de;--accent:#e88a28;--soft:#f4eee5}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{background:var(--paper);border-bottom:1px solid var(--line);padding:16px 20px;position:sticky;top:0;z-index:3}
-.head,main{width:min(980px,100%);margin:auto}.head{display:flex;align-items:center;justify-content:space-between;gap:12px}.brand{font:600 21px Georgia,serif}.sub{color:var(--muted);font-size:12px}
-main{padding:26px 20px 60px}.intro{margin-bottom:18px}.intro h1{font:26px Georgia,serif;margin:0 0 6px}.intro p{margin:0;color:var(--muted)}
-.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0}.btn{border:1px solid var(--line);background:white;color:var(--ink);padding:9px 13px;border-radius:8px;font-weight:650;cursor:pointer}.btn.primary{background:var(--ink);border-color:var(--ink);color:white}.btn:disabled{opacity:.5;cursor:wait}
-.status{font-size:12px;color:var(--muted);flex:1;min-width:180px}.keybox[hidden]{display:none}.keybox{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 18px;padding:13px;background:var(--soft);border-radius:10px}.keybox input{flex:1;min-width:180px;border:1px solid var(--line);border-radius:7px;padding:9px;background:white}
-.list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.item{display:flex;align-items:center;gap:12px;background:white;border:1px solid var(--line);border-radius:10px;padding:10px;min-width:0;cursor:grab}.item.dragging{opacity:.4}.item.over{outline:2px solid var(--accent)}.handle{font-size:19px;color:#aaa;cursor:grab}.thumb{width:68px;height:82px;object-fit:cover;background:var(--soft);border-radius:5px;flex:0 0 auto}.info{min-width:0;flex:1}.title{font-weight:650;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.meta{font-size:11px;color:var(--muted);margin-top:5px}.pos{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
-.empty,.error{background:white;border:1px solid var(--line);padding:24px;border-radius:10px;color:var(--muted)}.help{font-size:12px;color:var(--muted);margin-top:16px}
-@media(max-width:650px){main{padding:20px 12px}.list{grid-template-columns:1fr}.head{padding:0 2px}.intro h1{font-size:23px}}
+:root{--bg:#faf9f6;--paper:#fff;--ink:#292929;--muted:#777;--line:#e7e4de;--accent:#e88a28}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{width:min(680px,100%);margin:12vh auto;padding:32px 24px;text-align:center}
+.brand{font:600 30px Georgia,serif;margin-bottom:8px}
+h1{font:30px Georgia,serif;margin:28px 0 12px}
+p{color:var(--muted);margin:0 auto 22px;max-width:540px}
+a{display:inline-block;background:var(--ink);color:white;text-decoration:none;padding:12px 18px;border-radius:9px;font-weight:650}
+.note{margin-top:24px;font-size:13px}
 </style>
 </head>
-<body>
-<header><div class="head"><div><div class="brand">content studio</div><div class="sub">Organizador do feed</div></div><a class="sub" href="./" target="_blank" rel="noopener">Abrir prévia ↗</a></div></header>
-<main>
-<section class="intro"><h1>Organize a ordem das publicações</h1><p>Arraste os cartões para montar a sequência do seu feed. Depois, salve para atualizar o Notion e a prévia.</p></section>
-<div class="keybox" id="keybox"><input id="key" type="password" autocomplete="current-password" placeholder="Chave de edição do Content Studio"><button class="btn" id="remember">Usar nesta sessão</button></div>
-<div class="toolbar"><button class="btn" id="reload">↻ Atualizar lista</button><button class="btn primary" id="save" disabled>Salvar nova ordem</button><span class="status" id="status">Carregando publicações…</span></div>
-<section class="list" id="list"><div class="empty">Carregando…</div></section>
-<p class="help">A ordem salva é aplicada ao campo interno “Ordem no feed”. A tabela nativa do Notion continua disponível para editar os dados das publicações; use este painel para reorganizar visualmente o feed.</p>
-</main>
-<script>
-const API="https://content-studio-api.studio-gh.workers.dev";
-const list=document.getElementById("list"),status=document.getElementById("status"),save=document.getElementById("save"),keyInput=document.getElementById("key"),keybox=document.getElementById("keybox");
-let posts=[],dragged=null,dirty=false,writeKey=sessionStorage.getItem("cs_write_key")||"";
-keyInput.value=writeKey;if(writeKey){keybox.hidden=true;status.textContent="Sessão autorizada. Você já pode reorganizar o feed.";}
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-function card(p,i){const img=p.previewImage?'<img class="thumb" src="'+esc(p.previewImage)+'" alt="" onerror="this.style.visibility=\'hidden\'">':'<div class="thumb"></div>';return '<article class="item" draggable="true" data-id="'+esc(p.id)+'"><span class="handle" aria-hidden="true">⠿</span>'+img+'<div class="info"><div class="title">'+esc(p.title)+'</div><div class="meta">'+esc([p.date,p.editorial,p.format,p.status].filter(Boolean).join(" · "))+'</div></div><span class="pos">'+String(i+1).padStart(2,"0")+'</span></article>'}
-function render(){list.innerHTML=posts.length?posts.map(card).join(""):'<div class="empty">Nenhuma publicação com data encontrada.</div>';save.disabled=!dirty||!posts.length}
-function move(from,to){if(from===to)return;const p=posts.splice(from,1)[0];posts.splice(to,0,p);dirty=true;render();status.textContent="Ordem alterada. Salve para sincronizar."}
-list.addEventListener("dragstart",e=>{const el=e.target.closest(".item");if(!el)return;dragged=posts.findIndex(p=>p.id===el.dataset.id);el.classList.add("dragging");e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",String(dragged))});
-list.addEventListener("dragend",e=>{e.target.closest(".item")?.classList.remove("dragging");list.querySelectorAll(".over").forEach(x=>x.classList.remove("over"));dragged=null});
-list.addEventListener("dragover",e=>{const el=e.target.closest(".item");if(!el||dragged===null)return;e.preventDefault();list.querySelectorAll(".over").forEach(x=>x.classList.remove("over"));el.classList.add("over")});
-list.addEventListener("drop",e=>{const el=e.target.closest(".item");if(!el||dragged===null)return;e.preventDefault();const to=posts.findIndex(p=>p.id===el.dataset.id);move(dragged,to)});
-async function load(){if(dirty&&!confirm("Descartar a ordem ainda não salva e carregar novamente?"))return;dirty=false;save.disabled=true;status.textContent="Buscando publicações no Notion…";list.innerHTML='<div class="empty">Carregando…</div>';try{const r=await fetch(API+"/api/feed?limit=50",{cache:"no-store"});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||"Falha ao carregar");posts=(d.posts||[]).sort((a,b)=>(Number(a.order??999999)-Number(b.order??999999)));render();status.textContent=posts.length+" publicações carregadas."}catch(e){list.innerHTML='<div class="error">'+esc(e.message)+'</div>';status.textContent="Não foi possível atualizar."}}
-async function saveOrder(){if(!posts.length)return;if(!writeKey){writeKey=keyInput.value.trim()}if(!writeKey){status.textContent="Informe a chave de edição para salvar.";keyInput.focus();return}save.disabled=true;save.textContent="Salvando…";status.textContent="Gravando a ordem no Notion…";try{const r=await fetch(API+"/api/reorder",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key:writeKey,orderedIds:posts.map(p=>p.id)})});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||"Não foi possível salvar");sessionStorage.setItem("cs_write_key",writeKey);dirty=false;status.textContent="Ordem salva. "+d.updated+" publicações atualizadas no Notion.";await load()}catch(e){status.textContent=e.message;if(/chave|autoriz/i.test(e.message)){writeKey="";sessionStorage.removeItem("cs_write_key")}}finally{save.textContent="Salvar nova ordem";save.disabled=!dirty}}
-document.getElementById("reload").onclick=load;document.getElementById("save").onclick=saveOrder;document.getElementById("remember").onclick=()=>{writeKey=keyInput.value.trim();if(writeKey){sessionStorage.setItem("cs_write_key",writeKey);keybox.hidden=true;status.textContent="Sessão autorizada. Você já pode reorganizar o feed."}else status.textContent="Digite a chave primeiro."};load();
-</script>
-</body></html>
+<body><main>
+<div class="brand">content studio</div>
+<div>Organizador do feed</div>
+<h1>Agora, seu calendário organiza o feed.</h1>
+<p>A ordem das publicações é definida pela propriedade <b>Data</b> no Calendário editorial do Notion. Mova uma publicação para outra data e atualize a prévia. Não é mais necessário usar este organizador separado.</p>
+<a href="./">Abrir prévia do Instagram</a>
+<p class="note">No Notion: abra Calendário editorial, mova os cartões e depois clique em Atualizar na prévia.</p>
+</main></body></html>
