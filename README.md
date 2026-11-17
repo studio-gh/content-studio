@@ -13,14 +13,14 @@ Workspace visual do Content Studio, com calendário editorial e prévia 3:4 do f
 ## Estrutura
 
 - `index.html`: aplicação web.
-- `worker.js`: API intermediária do Notion.
+- `worker.js`: API intermediária do Notion.\n- `wrangler.toml`: configuração do Cloudflare Worker.\n- `.github/workflows/deploy-worker.yml`: publicação manual do Worker via GitHub Actions.
 - `.github/workflows/validate.yml`: verificações de sintaxe e regras essenciais.
 
 ## Worker
 
 O Worker requer o secret `NOTION_TOKEN`. O token deve permanecer exclusivamente nos secrets do Cloudflare.
 
-A API atual disponibiliza:
+Antes de publicar, configure `NOTION_TOKEN` nos secrets do Worker no painel Cloudflare. Para usar o workflow manual, configure também os secrets `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` no GitHub. O workflow exige acionamento manual e usa o ambiente `production`.\n\nA API atual disponibiliza:
 - `GET /api/health`
 - `GET /api/notion-test`
 - `GET /api/profile`
