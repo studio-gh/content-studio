@@ -134,12 +134,21 @@ export default {
       const routeParts = url.pathname.split("/").filter(Boolean);
       const postId = routeParts.length === 3 && routeParts[0] === "api" && routeParts[1] === "post" ? routeParts[2] : "";
       if (postId && /^[0-9a-f-]{36}$/i.test(postId)) {
-        const data = await notionRequest(`/blocks/${postId}/children?page_size=100`);
+        const cursor = url.searchParams.get("cursor");
+        const query = new URLSearchParams({ page_size: "100" });
+        if (cursor && cursor.length <= 200) query.set("start_cursor", cursor);
+        const data = await notionRequest(`/blocks/${postId}/children?${query.toString()}`);
         const content = (data.results || []).map(block => ({
           type: block.type,
-          text: extractBlockText(block)
-        })).filter(block => block.text);
-        return Response.json({ ok: true, content, hasMore: Boolean(data.has_more) }, { headers });
+          text: extractBlockText(block),
+          hasChildren: Boolean(block.has_children)
+        })).filter(block => block.text || block.hasChildren);
+        return Response.json({
+          ok: true,
+          content,
+          hasMore: Boolean(data.has_more),
+          nextCursor: data.next_cursor || null
+        }, { headers });
       }
       if (url.pathname === "/api/profile") {
         const data = await notionRequest(`/databases/${PROFILE_DATABASE_ID}/query`, {
