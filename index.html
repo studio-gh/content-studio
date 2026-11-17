@@ -66,7 +66,7 @@ function filtersMatch(post){const query=$("search").value.trim().toLowerCase();r
 function filteredPosts(includeStories){return state.posts.filter(p=>(includeStories||!isStory(p))&&filtersMatch(p))}
 function setText(id,value){$(id).textContent=value}
 function fallback(post){return '<div class="fallback"><small>'+esc(post.editorial||post.pillar||"Sua marca")+'</small><strong>'+esc((post.title||"Sua próxima publicação").replace(/^\d+\s*[·.-]\s*/,""))+'</strong><small>'+esc(post.format||"conteúdo")+'</small></div>'}
-function handleImageError(img){const post=state.posts.find(item=>item.id===img.dataset.postImage);if(!post)return;const node=document.createElement("div");node.className="fallback";node.innerHTML=fallback(post);img.replaceWith(node)}
+function handleImageError(img){const post=state.posts.find(item=>item.id===img.dataset.postImage);if(!post)return;const node=document.createElement("div");node.className="fallback";node.innerHTML=fallback(post);img.replaceWith(node)}\nfunction bindImageFallbacks(root){root.querySelectorAll("img[data-post-image]").forEach(img=>img.addEventListener("error",()=>handleImageError(img),{once:true}))}
 function imageMarkup(post,extra){if(!post.previewImage)return fallback(post);return '<img src="'+esc(post.previewImage)+'" alt="'+esc(post.title)+'" loading="lazy" data-post-image="'+esc(post.id)+'" '+(extra||"")+' onerror="handleImageError(this)">'}
 function updateMetrics(){
  const all=state.posts,ready=all.filter(p=>p.status==="Pronto").length,production=all.filter(p=>p.status==="Em produção").length,ideas=all.filter(p=>p.status==="Ideia").length,dated=all.filter(p=>p.date).length;
