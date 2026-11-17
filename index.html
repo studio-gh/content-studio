@@ -66,7 +66,8 @@ function filtersMatch(post){const query=$("search").value.trim().toLowerCase();r
 function filteredPosts(includeStories){return state.posts.filter(p=>(includeStories||!isStory(p))&&filtersMatch(p))}
 function setText(id,value){$(id).textContent=value}
 function fallback(post){return '<div class="fallback"><small>'+esc(post.editorial||post.pillar||"Sua marca")+'</small><strong>'+esc((post.title||"Sua próxima publicação").replace(/^\d+\s*[·.-]\s*/,""))+'</strong><small>'+esc(post.format||"conteúdo")+'</small></div>'}
-function imageMarkup(post,extra){if(!post.previewImage)return fallback(post);return '<img src="'+esc(post.previewImage)+'" alt="'+esc(post.title)+'" loading="lazy" '+(extra||"")+' onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'fallback\',innerHTML:'+JSON.stringify(fallback(post))+'}))">'}
+function handleImageError(img){const post=state.posts.find(item=>item.id===img.dataset.postImage);if(!post)return;const node=document.createElement("div");node.className="fallback";node.innerHTML=fallback(post);img.replaceWith(node)}
+function imageMarkup(post,extra){if(!post.previewImage)return fallback(post);return '<img src="'+esc(post.previewImage)+'" alt="'+esc(post.title)+'" loading="lazy" data-post-image="'+esc(post.id)+'" '+(extra||"")+' onerror="handleImageError(this)">'}
 function updateMetrics(){
  const all=state.posts,ready=all.filter(p=>p.status==="Pronto").length,production=all.filter(p=>p.status==="Em produção").length,ideas=all.filter(p=>p.status==="Ideia").length,dated=all.filter(p=>p.date).length;
  setText("totalPosts",all.length);setText("scheduledPosts",dated);setText("readyPosts",ready);
@@ -150,7 +151,7 @@ async function load(){
  }finally{button.disabled=false;button.textContent="↻ Atualizar"}
 }
 $("refresh").addEventListener("click",load);
-$("openNotion").addEventListener("click",()=>window.open("https://www.notion.so/","_blank","noopener"));
+$("openNotion").addEventListener("click",()=>window.open("https://app.notion.com/p/410029fe002881ce8bddf5237e947fc6","_blank","noopener"));
 document.querySelectorAll(".view-btn").forEach(btn=>btn.addEventListener("click",()=>setView(btn.dataset.view)));
 ["search","editorialFilter","formatFilter","statusFilter"].forEach(id=>$(id).addEventListener("input",render));
 $("prevMonth").addEventListener("click",()=>{state.month=new Date(state.month.getFullYear(),state.month.getMonth()-1,1);renderCalendar()});
