@@ -131,10 +131,10 @@ export default {
         const data = await notionRequest("/users/me");
         return Response.json({ ok: true, message: "Conexão com Notion funcionando", integration: data.name || "Content Studio API" }, { headers });
       }
-      const postMatch = url.pathname.match(/^\\/api\\/post\\/([0-9a-f-]{36})$/i);
-      if (postMatch) {
-        const pageId = postMatch[1];
-        const data = await notionRequest(`/blocks/${pageId}/children?page_size=100`);
+      const routeParts = url.pathname.split("/").filter(Boolean);
+      const postId = routeParts.length === 3 && routeParts[0] === "api" && routeParts[1] === "post" ? routeParts[2] : "";
+      if (postId && /^[0-9a-f-]{36}$/i.test(postId)) {
+        const data = await notionRequest(`/blocks/${postId}/children?page_size=100`);
         const content = (data.results || []).map(block => ({
           type: block.type,
           text: extractBlockText(block)
