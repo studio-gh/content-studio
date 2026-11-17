@@ -8,7 +8,7 @@ Workspace visual do Content Studio, com calendário editorial e prévia 3:4 do f
 - Calendário mostra todos os formatos, incluindo Stories.
 - Grade do Instagram oculta Stories e respeita a propriedade `Ordem no feed`.
 - URLs de arquivos do Notion são solicitadas novamente a cada sincronização para evitar depender de links assinados antigos.
-- API propositalmente somente leitura nesta etapa. Não há edição persistente, reordenação por arrastar ou criação de ideias pela interface.
+- API propositalmente somente leitura nesta etapa. O painel de revisão não registra aprovações externas; comentários e alterações são feitos no registro original do Notion. Não há edição persistente, reordenação por arrastar ou criação de ideias pela interface.
 
 ## Estrutura
 
