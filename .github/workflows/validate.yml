@@ -33,9 +33,9 @@ jobs:
           const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
           if (!scripts.length) throw new Error('Nenhum script encontrado em index.html');
           scripts.forEach((match, index) => {
-            const file = \`/tmp/content-studio-inline-\${index}.js\`;
+            const file = '/tmp/content-studio-inline-' + index + '.js';
             fs.writeFileSync(file, match[1]);
-            console.log(\`Validando \${file}\`);
+            console.log('Validando ' + file);
           });
           NODE
           for file in /tmp/content-studio-inline-*.js; do node --check "$file"; done
@@ -54,7 +54,7 @@ jobs:
             ['Notion token not embedded in browser code', !/secret_[A-Za-z0-9]{20,}|ntn_[A-Za-z0-9]{20,}/.test(html)]
           ];
           for (const [label, ok] of checks) {
-            console.log(\`\${ok ? 'PASS' : 'FAIL'}: \${label}\`);
+            console.log((ok ? 'PASS' : 'FAIL') + ': ' + label);
             if (!ok) process.exitCode = 1;
           }
           NODE
