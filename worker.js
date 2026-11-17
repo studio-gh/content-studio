@@ -51,7 +51,7 @@ function normalizePost(page) {
     format: getText(p["Formato"]),
     status: getText(p["Status"]),
     category: getText(p["Categoria"]),
-    pillar: getText(p["Pilar"]),
+    pillar: getText(p["Pilar"]) || getText(p["Pilar editorial"]),
     objectives: getMultiSelect(p["Objetivos"]),
     tags: getMultiSelect(p["Tags"]),
     previewImage: files[0]?.url || null,
@@ -195,10 +195,8 @@ export default {
           if (!startCursor) hasMore = false;
         }
 
-        // Stories are planned in the same calendar, but do not belong in the Instagram profile grid.
-        const posts = allResults
-          .map(normalizePost)
-          .filter(post => post.format !== "Stories");
+        // Keep every format here. The calendar needs Stories too; the profile grid filters them in the UI.
+        const posts = allResults.map(normalizePost);
 
         return Response.json({
           ok: true,
