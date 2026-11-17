@@ -28,6 +28,7 @@ A API atual disponibiliza:
 - `GET /api/health`
 - `GET /api/notion-test`
 - `GET /api/profile`
+- `GET /api/post/:pageId` (texto dos blocos do registro selecionado)
 - `GET /api/feed?limit=100`
 
 A API ainda não deve ser considerada pronta para múltiplos clientes. OAuth do Notion, isolamento por workspace/marca, sessões e escrita autenticada são requisitos para a versão comercial.
