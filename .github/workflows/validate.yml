@@ -55,7 +55,7 @@ jobs:
             ['Feed grid sorts by explicit order', /Number\.isFinite\(a\.order\)[\s\S]*?Number\.isFinite\(b\.order\)/.test(html)],
             ['Review inspector is accessible', /role=\"dialog\" aria-modal=\"true\"/.test(html)],
             ['Review panel fetches Notion page text', html.includes('/api/post/') && html.includes('reviewCopyText')],
-            ['Worker reads selected page blocks', worker.includes('/blocks/') && worker.includes('children?page_size=100')],
+            ['Worker reads selected page blocks', worker.includes('/blocks/') && worker.includes('page_size: "100"') && worker.includes('next_cursor')],
             ['No insecure public reorder endpoint', !/api\/reorder/.test(worker)],
             ['Notion token not embedded in browser code', !/secret_[A-Za-z0-9]{20,}|ntn_[A-Za-z0-9]{20,}/.test(html)]
           ];
