@@ -53,6 +53,9 @@ jobs:
             ['Stories excluded from profile grid', /function filteredPosts\(includeStories\)[\s\S]*?includeStories\|\|!isStory\(p\)/.test(html)],
             ['Feed order mapped from Notion', /order: typeof p\["Ordem no feed"\]\?\.number === "number"/.test(worker)],
             ['Feed grid sorts by explicit order', /Number\.isFinite\(a\.order\)[\s\S]*?Number\.isFinite\(b\.order\)/.test(html)],
+            ['Review inspector is accessible', /role=\"dialog\" aria-modal=\"true\"/.test(html)],
+            ['Review panel fetches Notion page text', /api\\/post\\//.test(html) && /reviewCopyText/.test(html)],
+            ['Worker reads selected page blocks', /blocks\\//.test(worker) && /children\?page_size=100/.test(worker)],
             ['No insecure public reorder endpoint', !/api\/reorder/.test(worker)],
             ['Notion token not embedded in browser code', !/secret_[A-Za-z0-9]{20,}|ntn_[A-Za-z0-9]{20,}/.test(html)]
           ];
