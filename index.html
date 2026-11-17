@@ -16,7 +16,7 @@
 .modal-info{padding:24px 28px 34px;overflow:auto}
 .modal-info h3{font-size:28px}
 .review-kicker{font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);font-weight:700}
-.review-context{background:#faf8f3;border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-top:18px}
+.review-copy{margin-top:18px;padding-top:4px}.review-copy p{white-space:pre-wrap;color:#514d46;font-size:12px;line-height:1.7;margin:8px 0}.review-context{background:#faf8f3;border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-top:18px}
 .review-context strong{display:block;font:16px Georgia;margin-bottom:4px}
 .review-context p{margin:0;color:var(--muted);font-size:11px;line-height:1.55}
 .review-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
@@ -62,7 +62,7 @@
  </section>
 </main>
 </div>
-<div class="modal" id="modal" aria-hidden="true"><button class="modal-close" id="closeModal" aria-label="Fechar">×</button><aside class="dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-image" id="modalImage"></div><div class="modal-info"><div class="review-kicker">Prévia da publicação</div><div class="eyebrow" id="modalEditorial">PUBLICAÇÃO</div><h3 id="modalTitle"></h3><span class="status-tag" id="modalStatus"></span><p id="modalDate"></p><div class="detail-list" id="modalDetails"></div><div class="review-context"><strong>Revisão do conteúdo</strong><p>Abra o registro no Notion para consultar o material completo, deixar comentários e solicitar ajustes. O status e as alterações continuam sincronizados pela base original.</p></div><div class="review-actions"><a class="btn primary" id="notionLink" href="#" target="_blank" rel="noopener">Revisar no Notion ↗</a><button class="btn" id="closeReview" type="button">Voltar ao planejamento</button></div><div class="notice">Esta prévia ainda não registra aprovações externas. O fluxo de aprovação com permissões e histórico será implementado na próxima etapa.</div></div></aside></div>
+<div class="modal" id="modal" aria-hidden="true"><button class="modal-close" id="closeModal" aria-label="Fechar">×</button><aside class="dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-image" id="modalImage"></div><div class="modal-info"><div class="review-kicker">Prévia da publicação</div><div class="eyebrow" id="modalEditorial">PUBLICAÇÃO</div><h3 id="modalTitle"></h3><span class="status-tag" id="modalStatus"></span><p id="modalDate"></p><div class="detail-list" id="modalDetails"></div><section class="review-copy" id="reviewCopy"><div class="review-kicker">Legenda e texto do conteúdo</div><p id="reviewCopyText">Carregando o texto do registro…</p></section><div class="review-context"><strong>Revisão do conteúdo</strong><p>Abra o registro no Notion para consultar o material completo, deixar comentários e solicitar ajustes. O status e as alterações continuam sincronizados pela base original.</p></div><div class="review-actions"><a class="btn primary" id="notionLink" href="#" target="_blank" rel="noopener">Revisar no Notion ↗</a><button class="btn" id="closeReview" type="button">Voltar ao planejamento</button></div><div class="notice">Esta prévia ainda não registra aprovações externas. O fluxo de aprovação com permissões e histórico será implementado na próxima etapa.</div></div></aside></div>
 <script>
 (function(){
 "use strict";
@@ -108,15 +108,15 @@ function renderPillars(){
  const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
  $("pillarList").innerHTML=entries.length?entries.map(([name,count])=>'<span class="pillar-chip">'+esc(name)+' <b>'+count+'</b></span>').join(""):'<span class="pillar-chip">Nenhum pilar identificado</span>';
 }
-function openPost(post){
+async function openPost(post){
  setText("modalEditorial",post.editorial||post.pillar||"PUBLICAÇÃO");setText("modalTitle",post.title||"Publicação sem título");
  setText("modalStatus",statusText(post.status));$("modalStatus").className="status-tag "+statusClass(post.status);
  const date=parseDate(post.date);setText("modalDate",date?dateFmt.format(date):"Sem data definida");
- $("modalImage").innerHTML=imageMarkup(post);bindImageFallbacks($("modalImage"));
+ $("modalImage").innerHTML=imageMarkup(post);bindImageFallbacks($("modalImage"));setText("reviewCopyText","Carregando o texto do registro…");
  const details=[["Formato",post.format],["Pilar",post.pillar],["Categoria",post.category],["Tags",(post.tags||[]).join(", ")],["Objetivo",(post.objectives||[]).join(", ")]].filter(row=>row[1]);
  $("modalDetails").innerHTML=details.map(row=>'<div class="detail"><span>'+esc(row[0])+'</span><strong>'+esc(row[1])+'</strong></div>').join("");
  const link=$("notionLink");if(post.notionUrl){link.href=post.notionUrl;link.classList.remove("hidden")}else{link.href="#";link.classList.add("hidden")}
- $("modal").classList.add("open");$("modal").setAttribute("aria-hidden","false");document.body.style.overflow="hidden";$("closeModal").focus();
+ $("modal").classList.add("open");$("modal").setAttribute("aria-hidden","false");document.body.style.overflow="hidden";$("closeModal").focus();\n try{const response=await fetch(API_BASE+"/api/post/"+encodeURIComponent(post.id),{cache:"no-store"});if(!response.ok)throw new Error("Conteúdo indisponível");const data=await response.json();if(!data.ok)throw new Error("Conteúdo indisponível");const text=(data.content||[]).map(block=>block.text).join("\\n\\n");setText("reviewCopyText",text||"Este registro ainda não tem texto no corpo da página do Notion.");}catch(error){setText("reviewCopyText","Não foi possível carregar o texto agora. Abra o registro no Notion para consultar a legenda e o briefing.");}
 }
 function closeModal(){$("modal").classList.remove("open");$("modal").setAttribute("aria-hidden","true");document.body.style.overflow=""}
 function renderCalendar(){
