@@ -117,7 +117,18 @@ async function openPost(post){
  $("modalDetails").innerHTML=details.map(row=>'<div class="detail"><span>'+esc(row[0])+'</span><strong>'+esc(row[1])+'</strong></div>').join("");
  const link=$("notionLink");if(post.notionUrl){link.href=post.notionUrl;link.classList.remove("hidden")}else{link.href="#";link.classList.add("hidden")}
  $("modal").classList.add("open");$("modal").setAttribute("aria-hidden","false");document.body.style.overflow="hidden";$("closeModal").focus();
- try{const response=await fetch(API_BASE+"/api/post/"+encodeURIComponent(post.id),{cache:"no-store"});if(!response.ok)throw new Error("Conteúdo indisponível");const data=await response.json();if(!data.ok)throw new Error("Conteúdo indisponível");const text=(data.content||[]).map(block=>block.text).join("\n\n");setText("reviewCopyText",text||"Este registro ainda não tem texto no corpo da página do Notion.");}catch(error){setText("reviewCopyText","Não foi possível carregar o texto agora. Abra o registro no Notion para consultar a legenda e o briefing.");}
+ try{
+  let cursor=null,blocks=[],pages=0,hasMore=true;
+  while(hasMore&&pages<10){
+   const endpoint=API_BASE+"/api/post/"+encodeURIComponent(post.id)+(cursor?"?cursor="+encodeURIComponent(cursor):"");
+   const response=await fetch(endpoint,{cache:"no-store"});
+   if(!response.ok)throw new Error("Conteúdo indisponível");
+   const data=await response.json();if(!data.ok)throw new Error("Conteúdo indisponível");
+   blocks.push(...(data.content||[]));cursor=data.nextCursor||null;hasMore=Boolean(data.hasMore&&cursor);pages++;
+  }
+  const text=blocks.map(block=>block.text).filter(Boolean).join("\n\n");
+  setText("reviewCopyText",(text||"Este registro ainda não tem texto no corpo da página do Notion.")+(hasMore?"\n\nPrévia parcial: o registro tem mais conteúdo do que esta janela consegue carregar. Abra o Notion para consultar o restante.":""));
+ }catch(error){setText("reviewCopyText","Não foi possível carregar o texto agora. Abra o registro no Notion para consultar a legenda e o briefing.");}
 }
 function closeModal(){$("modal").classList.remove("open");$("modal").setAttribute("aria-hidden","true");document.body.style.overflow=""}
 function renderCalendar(){
