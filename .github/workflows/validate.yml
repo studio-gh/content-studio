@@ -30,12 +30,12 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const html = fs.readFileSync('index.html', 'utf8');
-          const scripts = [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+          const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
           if (!scripts.length) throw new Error('Nenhum script encontrado em index.html');
           scripts.forEach((match, index) => {
-            const file = `/tmp/content-studio-inline-${index}.js`;
+            const file = \`/tmp/content-studio-inline-\${index}.js\`;
             fs.writeFileSync(file, match[1]);
-            console.log(`Validando ${file}`);
+            console.log(\`Validando \${file}\`);
           });
           NODE
           for file in /tmp/content-studio-inline-*.js; do node --check "$file"; done
@@ -47,14 +47,14 @@ jobs:
           const html = fs.readFileSync('index.html', 'utf8');
           const worker = fs.readFileSync('worker.js', 'utf8');
           const checks = [
-            ['Stories excluded from profile grid', /function filteredPosts\\(includeStories\\)[\\s\\S]*?includeStories\\|\\|!isStory\\(p\\)/.test(html)],
-            ['Feed order mapped from Notion', /order: typeof p\\["Ordem no feed"\\]\\?\\.number === "number"/.test(worker)],
-            ['Feed grid sorts by explicit order', /Number\\.isFinite\\(a\\.order\\)[\\s\\S]*?Number\\.isFinite\\(b\\.order\\)/.test(html)],
-            ['No insecure public reorder endpoint', !/api\\/reorder/.test(worker)],
+            ['Stories excluded from profile grid', /function filteredPosts\(includeStories\)[\s\S]*?includeStories\|\|!isStory\(p\)/.test(html)],
+            ['Feed order mapped from Notion', /order: typeof p\["Ordem no feed"\]\?\.number === "number"/.test(worker)],
+            ['Feed grid sorts by explicit order', /Number\.isFinite\(a\.order\)[\s\S]*?Number\.isFinite\(b\.order\)/.test(html)],
+            ['No insecure public reorder endpoint', !/api\/reorder/.test(worker)],
             ['Notion token not embedded in browser code', !/secret_[A-Za-z0-9]{20,}|ntn_[A-Za-z0-9]{20,}/.test(html)]
           ];
           for (const [label, ok] of checks) {
-            console.log(`${ok ? 'PASS' : 'FAIL'}: ${label}`);
+            console.log(\`\${ok ? 'PASS' : 'FAIL'}: \${label}\`);
             if (!ok) process.exitCode = 1;
           }
           NODE
