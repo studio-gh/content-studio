@@ -41,7 +41,10 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.includes("/data_sources/")) {
     return Response.json({ results: [post], has_more: false, next_cursor: null });
   }
-  if (url.includes("/blocks/")) {\n    return Response.json({ results: [{ type: "paragraph", paragraph: { rich_text: [{ plain_text: "Legenda de teste do post." }] } }], has_more: false });\n  }\n  if (url.includes("/databases/")) {
+  if (url.includes("/blocks/")) {
+    return Response.json({ results: [{ type: "paragraph", paragraph: { rich_text: [{ plain_text: "Legenda de teste do post." }] } }], has_more: false });
+  }
+  if (url.includes("/databases/")) {
     return Response.json({ results: [profile], has_more: false });
   }
   if (url.endsWith("/users/me")) {
@@ -63,7 +66,12 @@ assert.equal(feed.posts[0].pillar, "Produto");
 assert.equal(feed.posts[0].order, 3);
 assert.equal(feed.posts[0].previewImage, "https://files.notion.so/signed-preview");
 
-const copyResponse = await worker.fetch(new Request("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc"), { NOTION_TOKEN: "mock-token" });\nassert.equal(copyResponse.status, 200);\nconst copy = await copyResponse.json();\nassert.equal(copy.content[0].text, "Legenda de teste do post.");\n\nconst profileResponse = await worker.fetch(new Request("https://worker.test/api/profile"), { NOTION_TOKEN: "mock-token" });
+const copyResponse = await worker.fetch(new Request("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc"), { NOTION_TOKEN: "mock-token" });
+assert.equal(copyResponse.status, 200);
+const copy = await copyResponse.json();
+assert.equal(copy.content[0].text, "Legenda de teste do post.");
+
+const profileResponse = await worker.fetch(new Request("https://worker.test/api/profile"), { NOTION_TOKEN: "mock-token" });
 const profileData = await profileResponse.json();
 assert.equal(profileData.profile.name, "Marca Teste");
 assert.equal(profileData.profile.username, "marca.teste");
@@ -73,5 +81,6 @@ assert.equal(writeResponse.status, 405);
 
 console.log("PASS: health without Notion secret");
 console.log("PASS: feed mapping, Stories, pillar, order and refreshed file URL");
-console.log("PASS: on-demand page body extraction for review panel");\nconsole.log("PASS: profile mapping");
+console.log("PASS: on-demand page body extraction for review panel");
+console.log("PASS: profile mapping");
 console.log("PASS: write route rejected");
