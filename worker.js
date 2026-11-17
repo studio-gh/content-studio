@@ -61,6 +61,15 @@ function normalizePost(page) {
   };
 }
 
+function extractBlockText(block) {
+  const value = block?.[block.type];
+  if (!value) return "";
+  const rich = value.rich_text || value.title || [];
+  const text = rich.map(item => item.plain_text || item.text?.content || "").join("");
+  if (block.type === "child_page") return value.title || "";
+  return text;
+}
+
 function normalizeProfile(page) {
   const p = page.properties || {};
   const photos = getFiles(p["Foto do perfil"]);
@@ -121,6 +130,16 @@ export default {
       if (url.pathname === "/api/notion-test") {
         const data = await notionRequest("/users/me");
         return Response.json({ ok: true, message: "Conexão com Notion funcionando", integration: data.name || "Content Studio API" }, { headers });
+      }
+      const postMatch = url.pathname.match(/^\\/api\\/post\\/([0-9a-f-]{36})$/i);
+      if (postMatch) {
+        const pageId = postMatch[1];
+        const data = await notionRequest(`/blocks/${pageId}/children?page_size=100`);
+        const content = (data.results || []).map(block => ({
+          type: block.type,
+          text: extractBlockText(block)
+        })).filter(block => block.text);
+        return Response.json({ ok: true, content, hasMore: Boolean(data.has_more) }, { headers });
       }
       if (url.pathname === "/api/profile") {
         const data = await notionRequest(`/databases/${PROFILE_DATABASE_ID}/query`, {
