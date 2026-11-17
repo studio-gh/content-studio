@@ -42,7 +42,9 @@ globalThis.fetch = async (input, init = {}) => {
     return Response.json({ results: [post], has_more: false, next_cursor: null });
   }
   if (url.includes("/blocks/")) {
-    return Response.json({ results: [{ type: "paragraph", paragraph: { rich_text: [{ plain_text: "Legenda de teste do post." }] } }], has_more: false });
+    const page = new URL(url).searchParams.get("start_cursor");
+    if (!page) return Response.json({ results: [{ type: "paragraph", paragraph: { rich_text: [{ plain_text: "Legenda de teste do post." }] } }], has_more: true, next_cursor: "cursor-2" });
+    return Response.json({ results: [{ type: "heading_2", heading_2: { rich_text: [{ plain_text: "Detalhes adicionais." }] } }], has_more: false, next_cursor: null });
   }
   if (url.includes("/databases/")) {
     return Response.json({ results: [profile], has_more: false });
@@ -70,6 +72,12 @@ const copyResponse = await worker.fetch(new Request("https://worker.test/api/pos
 assert.equal(copyResponse.status, 200);
 const copy = await copyResponse.json();
 assert.equal(copy.content[0].text, "Legenda de teste do post.");
+assert.equal(copy.hasMore, true);
+assert.equal(copy.nextCursor, "cursor-2");
+const nextCopyResponse = await worker.fetch(new Request("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc?cursor=cursor-2"), { NOTION_TOKEN: "mock-token" });
+const nextCopy = await nextCopyResponse.json();
+assert.equal(nextCopy.content[0].text, "Detalhes adicionais.");
+assert.equal(nextCopy.hasMore, false);
 
 const profileResponse = await worker.fetch(new Request("https://worker.test/api/profile"), { NOTION_TOKEN: "mock-token" });
 const profileData = await profileResponse.json();
@@ -81,6 +89,6 @@ assert.equal(writeResponse.status, 405);
 
 console.log("PASS: health without Notion secret");
 console.log("PASS: feed mapping, Stories, pillar, order and refreshed file URL");
-console.log("PASS: on-demand page body extraction for review panel");
+console.log("PASS: paginated page body extraction for review panel");
 console.log("PASS: profile mapping");
 console.log("PASS: write route rejected");
