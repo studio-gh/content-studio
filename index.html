@@ -66,8 +66,9 @@ function filtersMatch(post){const query=$("search").value.trim().toLowerCase();r
 function filteredPosts(includeStories){return state.posts.filter(p=>(includeStories||!isStory(p))&&filtersMatch(p))}
 function setText(id,value){$(id).textContent=value}
 function fallback(post){return '<div class="fallback"><small>'+esc(post.editorial||post.pillar||"Sua marca")+'</small><strong>'+esc((post.title||"Sua próxima publicação").replace(/^\d+\s*[·.-]\s*/,""))+'</strong><small>'+esc(post.format||"conteúdo")+'</small></div>'}
-function handleImageError(img){const post=state.posts.find(item=>item.id===img.dataset.postImage);if(!post)return;const node=document.createElement("div");node.className="fallback";node.innerHTML=fallback(post);img.replaceWith(node)}\nfunction bindImageFallbacks(root){root.querySelectorAll("img[data-post-image]").forEach(img=>img.addEventListener("error",()=>handleImageError(img),{once:true}))}
-function imageMarkup(post,extra){if(!post.previewImage)return fallback(post);return '<img src="'+esc(post.previewImage)+'" alt="'+esc(post.title)+'" loading="lazy" data-post-image="'+esc(post.id)+'" '+(extra||"")+' onerror="handleImageError(this)">'}
+function handleImageError(img){const post=state.posts.find(item=>item.id===img.dataset.postImage);if(!post)return;const node=document.createElement("div");node.className="fallback";node.innerHTML=fallback(post);img.replaceWith(node)}
+function bindImageFallbacks(root){root.querySelectorAll("img[data-post-image]").forEach(img=>img.addEventListener("error",()=>handleImageError(img),{once:true}))}
+function imageMarkup(post,extra){if(!post.previewImage)return fallback(post);return '<img src="'+esc(post.previewImage)+'" alt="'+esc(post.title)+'" loading="lazy" data-post-image="'+esc(post.id)+'" '+(extra||"")+'>'}
 function updateMetrics(){
  const all=state.posts,ready=all.filter(p=>p.status==="Pronto").length,production=all.filter(p=>p.status==="Em produção").length,ideas=all.filter(p=>p.status==="Ideia").length,dated=all.filter(p=>p.date).length;
  setText("totalPosts",all.length);setText("scheduledPosts",dated);setText("readyPosts",ready);
@@ -95,7 +96,7 @@ function openPost(post){
  setText("modalEditorial",post.editorial||post.pillar||"PUBLICAÇÃO");setText("modalTitle",post.title||"Publicação sem título");
  setText("modalStatus",statusText(post.status));$("modalStatus").className="status-tag "+statusClass(post.status);
  const date=parseDate(post.date);setText("modalDate",date?dateFmt.format(date):"Sem data definida");
- $("modalImage").innerHTML=imageMarkup(post);
+ $("modalImage").innerHTML=imageMarkup(post);bindImageFallbacks($("modalImage"));
  const details=[["Formato",post.format],["Pilar",post.pillar],["Categoria",post.category],["Tags",(post.tags||[]).join(", ")],["Objetivo",(post.objectives||[]).join(", ")]].filter(row=>row[1]);
  $("modalDetails").innerHTML=details.map(row=>'<div class="detail"><span>'+esc(row[0])+'</span><strong>'+esc(row[1])+'</strong></div>').join("");
  const link=$("notionLink");if(post.notionUrl){link.href=post.notionUrl;link.classList.remove("hidden")}else{link.href="#";link.classList.add("hidden")}
@@ -123,6 +124,7 @@ function renderFeed(){
  const posts=filteredPosts(false).slice().sort((a,b)=>{const ao=Number.isFinite(a.order)?a.order:Number.MAX_SAFE_INTEGER;const bo=Number.isFinite(b.order)?b.order:Number.MAX_SAFE_INTEGER;return ao-bo||String(a.date||"").localeCompare(String(b.date||""))});
  setText("feedCount",posts.length+" publicações");
  $("feedGrid").innerHTML=posts.length?posts.map(post=>'<button class="tile" data-post="'+esc(post.id)+'" aria-label="Abrir '+esc(post.title)+'">'+imageMarkup(post)+'<span class="tile-overlay"><span class="tile-title">'+esc(post.title)+'</span><span class="tile-meta">'+esc([post.date,post.editorial,post.status].filter(Boolean).join(" · "))+'</span></span></button>').join(""):'<div class="empty"><strong>Nenhuma publicação encontrada</strong>Experimente mudar os filtros ou adicionar uma publicação com data no Notion.</div>';
+ bindImageFallbacks($("feedGrid"));
 }
 function render(){
  updateMetrics();renderPillars();renderCalendar();renderFeed();
