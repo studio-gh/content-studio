@@ -40,6 +40,9 @@ jobs:
           NODE
           for file in /tmp/content-studio-inline-*.js; do node --check "$file"; done
 
+      - name: Test Worker with mocked Notion responses
+        run: node scripts/test-worker.mjs
+
       - name: Check critical product behavior
         run: |
           node --input-type=module <<'NODE'
