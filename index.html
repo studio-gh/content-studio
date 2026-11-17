@@ -120,7 +120,7 @@ function renderCalendar(){
  $("calendarGrid").innerHTML=html;
 }
 function renderFeed(){
- const posts=filteredPosts(false).slice().sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+ const posts=filteredPosts(false).slice().sort((a,b)=>{const ao=Number.isFinite(a.order)?a.order:Number.MAX_SAFE_INTEGER;const bo=Number.isFinite(b.order)?b.order:Number.MAX_SAFE_INTEGER;return ao-bo||String(a.date||"").localeCompare(String(b.date||""))});
  setText("feedCount",posts.length+" publicações");
  $("feedGrid").innerHTML=posts.length?posts.map(post=>'<button class="tile" data-post="'+esc(post.id)+'" aria-label="Abrir '+esc(post.title)+'">'+imageMarkup(post)+'<span class="tile-overlay"><span class="tile-title">'+esc(post.title)+'</span><span class="tile-meta">'+esc([post.date,post.editorial,post.status].filter(Boolean).join(" · "))+'</span></span></button>').join(""):'<div class="empty"><strong>Nenhuma publicação encontrada</strong>Experimente mudar os filtros ou adicionar uma publicação com data no Notion.</div>';
 }
@@ -135,7 +135,7 @@ function setView(view){
 async function load(){
  const button=$("refresh");button.disabled=true;button.textContent="Atualizando…";setText("syncStatus","Sincronizando com Notion…");
  try{
-  const responses=await Promise.all([fetch(API_BASE+"/api/profile",{cache:"no-store"}),fetch(API_BASE+"/api/feed?limit=50",{cache:"no-store"})]);
+  const responses=await Promise.all([fetch(API_BASE+"/api/profile",{cache:"no-store"}),fetch(API_BASE+"/api/feed?limit=100",{cache:"no-store"})]);
   if(!responses[0].ok)throw new Error("Perfil: resposta "+responses[0].status);
   if(!responses[1].ok)throw new Error("Conteúdos: resposta "+responses[1].status);
   const data=await Promise.all(responses.map(r=>r.json()));
