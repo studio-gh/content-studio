@@ -6,6 +6,82 @@ const PROFILE_DATA_SOURCE_ID = "e82f8a29-82ef-4397-aebf-cd62f1222cc4";
 const LIBRARY_DATA_SOURCE_ID = "3d40dbe6-469b-44ef-b678-8fa30f9ce7f2";
 const IDEAS_DATA_SOURCE_ID = "ec75898c-2fbc-4d40-8be0-19f8e3ac01bb";
 
+let accessJwksCache = null;
+let accessJwksFetchedAt = 0;
+
+function base64UrlToBytes(value) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+
+function decodeJwtPart(value) {
+  return JSON.parse(new TextDecoder().decode(base64UrlToBytes(value)));
+}
+
+async function getAccessJwks(teamDomain) {
+  const now = Date.now();
+  if (accessJwksCache && now - accessJwksFetchedAt < 5 * 60 * 1000) return accessJwksCache;
+  const response = await fetch(`https://${teamDomain}/cdn-cgi/access/certs`);
+  if (!response.ok) throw new Error("Não foi possível validar a identidade");
+  accessJwksCache = await response.json();
+  accessJwksFetchedAt = now;
+  return accessJwksCache;
+}
+
+async function verifyAccessJwt(request, env) {
+  const teamDomain = String(env.ACCESS_TEAM_DOMAIN || "").replace(/^https?:\\/\\//, "").replace(/\\/$/, "");
+  const audience = String(env.ACCESS_AUD || "");
+  if (!teamDomain || !audience) throw new Error("Autenticação ainda não configurada");
+  const token = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+  if (!token || token.split(".").length !== 3) throw new Error("Autenticação necessária");
+
+  const [encodedHeader, encodedPayload, encodedSignature] = token.split(".");
+  const header = decodeJwtPart(encodedHeader);
+  const claims = decodeJwtPart(encodedPayload);
+  if (header.alg !== "RS256" || !header.kid) throw new Error("Token de acesso inválido");
+  const issuer = `https://${teamDomain}`;
+  const now = Math.floor(Date.now() / 1000);
+  const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (claims.iss !== issuer || !audiences.includes(audience) || !claims.sub ||
+      typeof claims.exp !== "number" || claims.exp <= now ||
+      (typeof claims.nbf === "number" && claims.nbf > now)) {
+    throw new Error("Token de acesso inválido ou expirado");
+  }
+
+  const jwks = await getAccessJwks(teamDomain);
+  const jwk = (jwks.keys || []).find(key => key.kid === header.kid && key.kty === "RSA");
+  if (!jwk) throw new Error("Chave de assinatura não encontrada");
+  const publicKey = await crypto.subtle.importKey(
+    "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]
+  );
+  const valid = await crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5",
+    publicKey,
+    base64UrlToBytes(encodedSignature),
+    new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`)
+  );
+  if (!valid) throw new Error("Assinatura do token inválida");
+  return { subject: claims.sub, email: String(claims.email || "").trim().toLowerCase() };
+}
+
+async function resolveWorkspaceMember(identity, env) {
+  if (!env.DB) throw new Error("Banco de permissões indisponível");
+  const member = await env.DB.prepare(`
+    SELECT wm.id AS member_id, wm.workspace_id, wm.role, wm.email, w.slug AS workspace_slug
+    FROM workspace_members wm
+    JOIN workspaces w ON w.id = wm.workspace_id
+    WHERE wm.disabled_at IS NULL
+      AND wm.accepted_at IS NOT NULL
+      AND (wm.auth_subject = ? OR lower(wm.email) = ?)
+    ORDER BY CASE WHEN wm.auth_subject = ? THEN 0 ELSE 1 END
+    LIMIT 1
+  `).bind(identity.subject, identity.email, identity.subject).first();
+  if (!member) throw new Error("Pessoa sem acesso a este workspace");
+  if (!["owner", "admin", "editor"].includes(member.role)) throw new Error("Seu perfil não permite acessar o estúdio");
+  return member;
+}
+
 function getText(property) {
   if (!property) return "";
   if (property.type === "title" || property.type === "rich_text") {
@@ -141,7 +217,18 @@ export default {
       return Response.json({ ok: false, error: "Método não permitido" }, { status: 405, headers });
     }
     if (url.pathname === "/api/health") {
-      return Response.json({ ok: true, service: "content-studio-api", notionTokenConfigured: Boolean(env.NOTION_TOKEN) }, { headers });
+      return Response.json({ ok: true, service: "content-studio-api", authenticationConfigured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD && env.DB) }, { headers });
+    }
+    let identity;
+    let workspaceMember;
+    try {
+      identity = await verifyAccessJwt(request, env);
+      workspaceMember = await resolveWorkspaceMember(identity, env);
+    } catch (authError) {
+      const status = authError.message === "Autenticação necessária" ? 401 :
+        authError.message.includes("não configurada") || authError.message.includes("indisponível") ? 503 :
+        authError.message.includes("não permite") ? 403 : 401;
+      return Response.json({ ok: false, error: authError.message }, { status, headers });
     }
     if (!env.NOTION_TOKEN) {
       return Response.json({ ok: false, error: "Integração com Notion indisponível" }, { status: 503, headers });
@@ -173,7 +260,7 @@ export default {
     try {
       if (url.pathname === "/api/notion-test") {
         const data = await notionRequest("/users/me");
-        return Response.json({ ok: true, message: "Conexão com Notion funcionando", integration: data.name || "Content Studio API" }, { headers });
+        return Response.json({ ok: true, message: "Conexão com Notion funcionando", integration: data.name || "Content Studio API", workspace: workspaceMember.workspace_slug, role: workspaceMember.role }, { headers });
       }
       const routeParts = url.pathname.split("/").filter(Boolean);
       const postId = routeParts.length === 3 && routeParts[0] === "api" && routeParts[1] === "post" ? routeParts[2] : "";
@@ -196,15 +283,15 @@ export default {
       }
       if (url.pathname === "/api/profile") {
         const profiles = await queryDataSource(PROFILE_DATA_SOURCE_ID, 1);
-        return Response.json({ ok: true, profile: profiles[0] ? normalizeProfile(profiles[0]) : null }, { headers });
+        return Response.json({ ok: true, workspace: workspaceMember.workspace_slug, profile: profiles[0] ? normalizeProfile(profiles[0]) : null }, { headers });
       }
       if (url.pathname === "/api/library") {
         const items = await queryDataSource(LIBRARY_DATA_SOURCE_ID, 100);
-        return Response.json({ ok: true, total: items.length, items: items.map(normalizeLibraryItem) }, { headers });
+        return Response.json({ ok: true, workspace: workspaceMember.workspace_slug, total: items.length, items: items.map(normalizeLibraryItem) }, { headers });
       }
       if (url.pathname === "/api/ideas") {
         const items = await queryDataSource(IDEAS_DATA_SOURCE_ID, 100);
-        return Response.json({ ok: true, total: items.length, items: items.map(normalizeIdea) }, { headers });
+        return Response.json({ ok: true, workspace: workspaceMember.workspace_slug, total: items.length, items: items.map(normalizeIdea) }, { headers });
       }
       if (url.pathname === "/api/notion-read-test" || url.pathname === "/api/feed") {
         const requestedLimit = Number(url.searchParams.get("limit") || 50);
