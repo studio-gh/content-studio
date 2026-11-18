@@ -36,9 +36,12 @@ const profile = {
   }
 };
 
+const feedQuerySizes = [];
+
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);
   if (url.includes("/data_sources/")) {
+    feedQuerySizes.push(Number(new URL(url).searchParams.get("page_size") || JSON.parse(init.body || "{}").page_size));
     return Response.json({ results: [post], has_more: false, next_cursor: null });
   }
   if (url.includes("/blocks/")) {
@@ -63,6 +66,7 @@ const feedResponse = await worker.fetch(new Request("https://worker.test/api/fee
 assert.equal(feedResponse.status, 200);
 const feed = await feedResponse.json();
 assert.equal(feed.posts.length, 1);
+assert.deepEqual(feedQuerySizes, [100], "Feed API must honor the frontend 100-item request");
 assert.equal(feed.posts[0].format, "Stories");
 assert.equal(feed.posts[0].pillar, "Produto");
 assert.equal(feed.posts[0].order, 3);
@@ -88,7 +92,7 @@ const writeResponse = await worker.fetch(new Request("https://worker.test/api/re
 assert.equal(writeResponse.status, 405);
 
 console.log("PASS: health without Notion secret");
-console.log("PASS: feed mapping, Stories, pillar, order and refreshed file URL");
+console.log("PASS: feed mapping, 100-item limit, Stories, pillar, order and refreshed file URL");
 console.log("PASS: paginated page body extraction for review panel");
 console.log("PASS: profile mapping");
 console.log("PASS: write route rejected");
