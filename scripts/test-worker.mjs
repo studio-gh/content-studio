@@ -48,7 +48,7 @@ const libraryItem = {
     "Descrição": { type: "rich_text", rich_text: [{ plain_text: "Referência visual de teste." }] },
     "Tags": { type: "multi_select", multi_select: [{ name: "Inspiração" }] },
     "Link do Drive": { type: "url", url: "https://drive.google.com/example" },
-    "Arquivo": { type: "files", files: [{ type: "external", name: "moodboard.jpg", external: { url: "https://example.com/moodboard.jpg" } }] }
+    "Arquivo": { type: "file", files: [{ type: "external", name: "moodboard.jpg", external: { url: "https://example.com/moodboard.jpg" } }] }
   }
 };
 const ideaItem = {
