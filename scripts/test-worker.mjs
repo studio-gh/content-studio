@@ -1,9 +1,44 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { generateKeyPairSync, sign } from "node:crypto";
 
 const source = fs.readFileSync("worker.js", "utf8");
 const loaded = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
 const worker = loaded.default;
+
+const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const publicJwk = publicKey.export({ format: "jwk" });
+publicJwk.kid = "content-studio-test-key";
+publicJwk.alg = "RS256";
+publicJwk.use = "sig";
+const base64url = value => Buffer.from(value).toString("base64url");
+const jwtHeader = base64url(JSON.stringify({ alg: "RS256", typ: "JWT", kid: publicJwk.kid }));
+const jwtPayload = base64url(JSON.stringify({
+  iss: "https://test.cloudflareaccess.com",
+  aud: ["content-studio-test-aud"],
+  sub: "user-subject-1",
+  email: "editor@example.com",
+  exp: Math.floor(Date.now() / 1000) + 300
+}));
+const jwtInput = `${jwtHeader}.${jwtPayload}`;
+const accessToken = `${jwtInput}.${sign("RSA-SHA256", Buffer.from(jwtInput), privateKey).toString("base64url")}`;
+const env = {
+  NOTION_TOKEN: "mock-token",
+  ACCESS_TEAM_DOMAIN: "test.cloudflareaccess.com",
+  ACCESS_AUD: "content-studio-test-aud",
+  DB: {
+    prepare() {
+      return { bind() { return { async first() {
+        return { member_id: "member-1", workspace_id: "workspace-1", role: "editor", email: "editor@example.com", workspace_slug: "workspace-demo" };
+      } }; } };
+    }
+  }
+};
+const authorizedRequest = (url, init = {}) => {
+  const headers = new Headers(init.headers || {});
+  headers.set("Authorization", `Bearer ${accessToken}`);
+  return new Request(url, { ...init, headers });
+};
 
 const post = {
   id: "page-post-1",
@@ -67,6 +102,7 @@ const ideaItem = {
 
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);
+  if (url === "https://test.cloudflareaccess.com/cdn-cgi/access/certs") return Response.json({ keys: [publicJwk] });
   if (url.includes("/data_sources/")) {
     const dataSourceId = url.split("/data_sources/")[1].split("/")[0];
     if (dataSourceId === "3d40dbe6-469b-44ef-b678-8fa30f9ce7f2") return Response.json({ results: [libraryItem], has_more: false });
@@ -91,9 +127,12 @@ globalThis.fetch = async (input, init = {}) => {
 
 const health = await worker.fetch(new Request("https://worker.test/api/health"), {});
 assert.equal(health.status, 200);
-assert.equal((await health.json()).notionTokenConfigured, false);
+assert.equal((await health.json()).authenticationConfigured, false);
 
-const feedResponse = await worker.fetch(new Request("https://worker.test/api/feed?limit=100"), { NOTION_TOKEN: "mock-token" });
+const deniedResponse = await worker.fetch(new Request("https://worker.test/api/feed"), env);
+assert.equal(deniedResponse.status, 401, "private endpoints must reject missing Access JWT");
+
+const feedResponse = await worker.fetch(authorizedRequest("https://worker.test/api/feed?limit=100"), env);
 assert.equal(feedResponse.status, 200);
 const feed = await feedResponse.json();
 assert.equal(feed.posts.length, 1);
@@ -103,23 +142,23 @@ assert.equal(feed.posts[0].pillar, "Produto");
 assert.equal(feed.posts[0].order, 3);
 assert.equal(feed.posts[0].previewImage, "https://files.notion.so/signed-preview");
 
-const copyResponse = await worker.fetch(new Request("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc"), { NOTION_TOKEN: "mock-token" });
+const copyResponse = await worker.fetch(authorizedRequest("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc"), env);
 assert.equal(copyResponse.status, 200);
 const copy = await copyResponse.json();
 assert.equal(copy.content[0].text, "Legenda de teste do post.");
 assert.equal(copy.hasMore, true);
 assert.equal(copy.nextCursor, "cursor-2");
-const nextCopyResponse = await worker.fetch(new Request("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc?cursor=cursor-2"), { NOTION_TOKEN: "mock-token" });
+const nextCopyResponse = await worker.fetch(authorizedRequest("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc?cursor=cursor-2"), env);
 const nextCopy = await nextCopyResponse.json();
 assert.equal(nextCopy.content[0].text, "Detalhes adicionais.");
 assert.equal(nextCopy.hasMore, false);
 
-const profileResponse = await worker.fetch(new Request("https://worker.test/api/profile"), { NOTION_TOKEN: "mock-token" });
+const profileResponse = await worker.fetch(authorizedRequest("https://worker.test/api/profile"), env);
 const profileData = await profileResponse.json();
 assert.equal(profileData.profile.name, "Marca Teste");
 assert.equal(profileData.profile.username, "marca.teste");
 
-const libraryResponse = await worker.fetch(new Request("https://worker.test/api/library"), { NOTION_TOKEN: "mock-token" });
+const libraryResponse = await worker.fetch(authorizedRequest("https://worker.test/api/library"), env);
 assert.equal(libraryResponse.status, 200);
 const library = await libraryResponse.json();
 assert.equal(library.items[0].name, "Moodboard de campanha");
@@ -127,17 +166,18 @@ assert.equal(library.items[0].category, "Referências");
 assert.equal(library.items[0].previewUrl, "https://example.com/moodboard.jpg");
 assert.equal(library.items[0].driveUrl, "https://drive.google.com/example");
 
-const ideasResponse = await worker.fetch(new Request("https://worker.test/api/ideas"), { NOTION_TOKEN: "mock-token" });
+const ideasResponse = await worker.fetch(authorizedRequest("https://worker.test/api/ideas"), env);
 assert.equal(ideasResponse.status, 200);
 const ideas = await ideasResponse.json();
 assert.equal(ideas.items[0].title, "Série de referências do mês");
 assert.equal(ideas.items[0].theme, "Design");
 assert.equal(ideas.items[0].status, "Nova");
 
-const writeResponse = await worker.fetch(new Request("https://worker.test/api/reorder", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }), { NOTION_TOKEN: "mock-token" });
+const writeResponse = await worker.fetch(authorizedRequest("https://worker.test/api/reorder", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }), env);
 assert.equal(writeResponse.status, 405);
 
-console.log("PASS: health without Notion secret");
+console.log("PASS: health endpoint and fail-closed private route");
+console.log("PASS: cryptographic Cloudflare Access JWT validation and workspace membership");
 console.log("PASS: feed mapping, 100-item limit, Stories, pillar, order and refreshed file URL");
 console.log("PASS: paginated page body extraction for review panel");
 console.log("PASS: profile mapping");
