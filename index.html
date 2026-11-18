@@ -121,7 +121,7 @@ function moveModal(direction){
  if(next)openPost(next);
 }
 async function openPost(post){
- const requestId=++state.modalRequestId;state.lastFocusedElement=document.activeElement;state.activePostId=post.id;updateModalNavigation();
+ const requestId=++state.modalRequestId;if(!$("modal").classList.contains("open"))state.lastFocusedElement=document.activeElement;state.activePostId=post.id;updateModalNavigation();
  setText("modalEditorial",post.editorial||post.pillar||"PUBLICAÇÃO");setText("modalTitle",post.title||"Publicação sem título");
  setText("modalStatus",statusText(post.status));$("modalStatus").className="status-tag "+statusClass(post.status);
  const date=parseDate(post.date);setText("modalDate",date?dateFmt.format(date):"Sem data definida");
@@ -145,7 +145,7 @@ async function openPost(post){
   setText("reviewCopyText",(text||"Este registro ainda não tem texto no corpo da página do Notion.")+(hasMore?"\n\nPrévia parcial: o registro tem mais conteúdo do que esta janela consegue carregar. Abra o Notion para consultar o restante.":""));
  }catch(error){if(requestId===state.modalRequestId)setText("reviewCopyText","Não foi possível carregar o texto agora. Abra o registro no Notion para consultar a legenda e o briefing.");}
 }
-function closeModal(){state.modalRequestId++;$("modal").classList.remove("open");$("modal").setAttribute("aria-hidden","true");document.body.style.overflow="";if(state.lastFocusedElement&&typeof state.lastFocusedElement.focus==="function")state.lastFocusedElement.focus();state.lastFocusedElement=null;}
+function closeModal(){state.modalRequestId++;$("modal").classList.remove("open");$("modal").setAttribute("aria-hidden","true");document.body.style.overflow="";state.activePostId=null;if(state.lastFocusedElement&&typeof state.lastFocusedElement.focus==="function")state.lastFocusedElement.focus();state.lastFocusedElement=null;}
 function renderCalendar(){
  const year=state.month.getFullYear(),month=state.month.getMonth();
  setText("monthLabel",monthFmt.format(state.month));
