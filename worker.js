@@ -3,6 +3,8 @@ const MAX_FEED_ITEMS = 100;
 
 const CONTENT_DATA_SOURCE_ID = "68e086ed-8655-413f-aca0-53fe36ad82e0";
 const PROFILE_DATABASE_ID = "bd79b8d1f3194107bb7a173511604c54";
+const LIBRARY_DATA_SOURCE_ID = "3d40dbe6-469b-44ef-b678-8fa30f9ce7f2";
+const IDEAS_DATA_SOURCE_ID = "ec75898c-2fbc-4d40-8be0-19f8e3ac01bb";
 
 function getText(property) {
   if (!property) return "";
@@ -58,6 +60,40 @@ function normalizePost(page) {
     previewImage: files[0]?.url || null,
     previewFiles: files,
     notionUrl: page.url,
+    updatedAt: page.last_edited_time
+  };
+}
+
+function normalizeLibraryItem(page) {
+  const p = page.properties || {};
+  const files = getFiles(p["Arquivo"]);
+  return {
+    id: page.id,
+    name: getText(p["Nome"]) || "Material sem título",
+    type: getText(p["Tipo"]),
+    category: getText(p["Categoria"]),
+    brand: getText(p["Marca"]),
+    description: getText(p["Descrição"]),
+    tags: getMultiSelect(p["Tags"]),
+    driveUrl: getPropertyValue(p["Link do Drive"]),
+    files,
+    previewUrl: files[0]?.url || null,
+    notionUrl: page.url,
+    updatedAt: page.last_edited_time
+  };
+}
+
+function normalizeIdea(page) {
+  const p = page.properties || {};
+  return {
+    id: page.id,
+    title: getText(p["Ideia"]) || "Ideia sem título",
+    note: getText(p["Anotação"]),
+    theme: getText(p["Tema"]),
+    status: getText(p["Status"]),
+    sourceUrl: getPropertyValue(p["Origem"]),
+    notionUrl: page.url,
+    createdAt: p["Criada em"]?.date?.start || page.created_time,
     updatedAt: page.last_edited_time
   };
 }
@@ -126,8 +162,15 @@ export default {
       return data;
     }
 
-    try {
+    async function queryDataSource(dataSourceId, limit = 100) {
+      const data = await notionRequest(`/data_sources/${dataSourceId}/query`, {
+        method: "POST",
+        body: JSON.stringify({ page_size: Math.min(100, Math.max(1, limit)), sorts: [{ timestamp: "last_edited_time", direction: "descending" }] })
+      }, "2025-09-03");
+      return data.results || [];
+    }
 
+    try {
       if (url.pathname === "/api/notion-test") {
         const data = await notionRequest("/users/me");
         return Response.json({ ok: true, message: "Conexão com Notion funcionando", integration: data.name || "Content Studio API" }, { headers });
@@ -158,6 +201,14 @@ export default {
         });
         return Response.json({ ok: true, profile: data.results[0] ? normalizeProfile(data.results[0]) : null }, { headers });
       }
+      if (url.pathname === "/api/library") {
+        const items = await queryDataSource(LIBRARY_DATA_SOURCE_ID, 100);
+        return Response.json({ ok: true, total: items.length, items: items.map(normalizeLibraryItem) }, { headers });
+      }
+      if (url.pathname === "/api/ideas") {
+        const items = await queryDataSource(IDEAS_DATA_SOURCE_ID, 100);
+        return Response.json({ ok: true, total: items.length, items: items.map(normalizeIdea) }, { headers });
+      }
       if (url.pathname === "/api/notion-read-test" || url.pathname === "/api/feed") {
         const requestedLimit = Number(url.searchParams.get("limit") || 50);
         const pageSize = Math.min(MAX_FEED_ITEMS, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 50));
@@ -182,9 +233,7 @@ export default {
           if (!startCursor) hasMore = false;
         }
 
-        // Keep every format here. The calendar needs Stories too; the profile grid filters them in the UI.
         const posts = allResults.map(normalizePost);
-
         return Response.json({
           ok: true,
           total: posts.length,
@@ -196,7 +245,7 @@ export default {
       return Response.json({
         service: "content-studio-api",
         status: "online",
-        endpoints: ["/api/health", "/api/notion-test", "/api/profile", "/api/feed"]
+        endpoints: ["/api/health", "/api/notion-test", "/api/profile", "/api/feed", "/api/library", "/api/ideas"]
       }, { headers });
     } catch (error) {
       return Response.json({ ok: false, error: error.message }, { status: 500, headers });
