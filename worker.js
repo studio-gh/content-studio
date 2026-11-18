@@ -1,4 +1,5 @@
 const NOTION_VERSION = "2022-06-28";
+const MAX_FEED_ITEMS = 100;
 
 const CONTENT_DATA_SOURCE_ID = "68e086ed-8655-413f-aca0-53fe36ad82e0";
 const PROFILE_DATABASE_ID = "bd79b8d1f3194107bb7a173511604c54";
@@ -159,7 +160,7 @@ export default {
       }
       if (url.pathname === "/api/notion-read-test" || url.pathname === "/api/feed") {
         const requestedLimit = Number(url.searchParams.get("limit") || 50);
-        const pageSize = Math.min(50, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 50));
+        const pageSize = Math.min(MAX_FEED_ITEMS, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 50));
         const allResults = [];
         let startCursor;
         let hasMore = true;
