@@ -86,6 +86,21 @@ CREATE INDEX IF NOT EXISTS idx_review_events_item_time
 CREATE INDEX IF NOT EXISTS idx_review_events_workspace_time
   ON review_events(workspace_id, created_at DESC);
 
+-- Reject cross-workspace or cross-batch event references at the database boundary.
+CREATE TRIGGER IF NOT EXISTS validate_review_event_scope
+BEFORE INSERT ON review_events
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM review_items AS item
+  JOIN review_batches AS batch ON batch.id = item.batch_id
+  WHERE item.id = NEW.item_id
+    AND item.batch_id = NEW.batch_id
+    AND batch.workspace_id = NEW.workspace_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'review event scope mismatch');
+END;
+
 -- Enforce the audit log as append-only at database level.
 CREATE TRIGGER IF NOT EXISTS prevent_review_event_update
 BEFORE UPDATE ON review_events
