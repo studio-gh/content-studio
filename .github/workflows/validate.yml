@@ -65,6 +65,11 @@ jobs:
           }
           NODE
 
+      - name: Validate D1 migration with SQLite
+        run: |
+          python -m py_compile scripts/test-schema.py
+          python scripts/test-schema.py
+
       - name: Validate workspace and review schema
         run: |
           node --input-type=module <<'NODE'
