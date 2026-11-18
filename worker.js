@@ -30,10 +30,10 @@ async function getAccessJwks(teamDomain) {
 }
 
 async function verifyAccessJwt(request, env) {
-  const teamDomain = String(env.ACCESS_TEAM_DOMAIN || "").replace(/^https?:\\/\\//, "").replace(/\\/$/, "");
+  const teamDomain = String(env.ACCESS_TEAM_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
   const audience = String(env.ACCESS_AUD || "");
   if (!teamDomain || !audience) throw new Error("Autenticação ainda não configurada");
-  const token = (request.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+  const token = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!token || token.split(".").length !== 3) throw new Error("Autenticação necessária");
 
   const [encodedHeader, encodedPayload, encodedSignature] = token.split(".");
