@@ -195,11 +195,8 @@ export default {
         }, { headers });
       }
       if (url.pathname === "/api/profile") {
-        const data = await notionRequest(`/databases/${PROFILE_DATABASE_ID}/query`, {
-          method: "POST",
-          body: JSON.stringify({ page_size: 1, sorts: [{ property: "Perfil", direction: "ascending" }] })
-        });
-        return Response.json({ ok: true, profile: data.results[0] ? normalizeProfile(data.results[0]) : null }, { headers });
+        const profiles = await queryDataSource(PROFILE_DATA_SOURCE_ID, 1);
+        return Response.json({ ok: true, profile: profiles[0] ? normalizeProfile(profiles[0]) : null }, { headers });
       }
       if (url.pathname === "/api/library") {
         const items = await queryDataSource(LIBRARY_DATA_SOURCE_ID, 100);
