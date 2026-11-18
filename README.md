@@ -5,6 +5,8 @@ Workspace visual do Content Studio, com calendário editorial e prévia 3:4 do f
 ## Estado atual
 
 - Interface de leitura conectada ao Worker do Notion.
+- Módulos de leitura para Planejamento, Biblioteca e Canto das Ideias.
+- O perfil do Instagram é consultado pela fonte de dados correta dentro da Central da Marca.
 - Calendário mostra todos os formatos, incluindo Stories.
 - Grade do Instagram oculta Stories e respeita a propriedade `Ordem no feed`.
 - O painel de revisão permite navegar entre publicações com botões anterior/próxima ou pelas setas esquerda/direita.
@@ -35,9 +37,11 @@ Antes de publicar, configure `NOTION_TOKEN` nos secrets do Worker no painel Clou
 A API atual disponibiliza:
 - `GET /api/health`
 - `GET /api/notion-test`
-- `GET /api/profile`
+- `GET /api/profile` (consulta a fonte de dados `Perfil do Instagram` dentro da Central da Marca)
 - `GET /api/post/:pageId` (texto dos blocos do registro selecionado)
 - `GET /api/feed?limit=100`
+- `GET /api/library` (leitura do Acervo/Biblioteca)
+- `GET /api/ideas` (leitura do Canto das Ideias)
 
 A API ainda não deve ser considerada pronta para múltiplos clientes. OAuth do Notion, isolamento por workspace/marca, sessões e escrita autenticada são requisitos para a versão comercial.
 
