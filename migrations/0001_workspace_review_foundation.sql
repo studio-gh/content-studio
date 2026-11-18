@@ -86,6 +86,19 @@ CREATE INDEX IF NOT EXISTS idx_review_events_item_time
 CREATE INDEX IF NOT EXISTS idx_review_events_workspace_time
   ON review_events(workspace_id, created_at DESC);
 
+-- Enforce the audit log as append-only at database level.
+CREATE TRIGGER IF NOT EXISTS prevent_review_event_update
+BEFORE UPDATE ON review_events
+BEGIN
+  SELECT RAISE(ABORT, 'review_events are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS prevent_review_event_delete
+BEFORE DELETE ON review_events
+BEGIN
+  SELECT RAISE(ABORT, 'review_events are append-only');
+END;
+
 -- Public review links store only a SHA-256 token hash, never the bearer token.
 CREATE TABLE IF NOT EXISTS review_link_tokens (
   id TEXT PRIMARY KEY,
