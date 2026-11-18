@@ -7,7 +7,7 @@ Use Cloudflare Access for authenticated studio/team access and Cloudflare D1 for
 ## Identity and authorization
 
 - Studio/team members authenticate through Cloudflare Access.
-- The Worker validates the Access JWT signature (RS256/JWKS), issuer, audience, expiry, and not-before before any private API operation.
+- The Worker implements cryptographic JWT verification for Cloudflare Access, validating the RS256 signature (JWKS), issuer, audience, expiry, and not-before before any private API operation.
 - Resolve the authenticated subject/email to an accepted, active `workspace_members` row on every protected request. Owner, admin, and editor roles can access studio routes; reviewer is denied from workspace-wide routes.
 - Enforce role permissions server-side: owner/admin manage workspace and invitations; editor manages content workflow; reviewer can read assigned review batches and submit review events only.
 - A reviewer link is a separate, expiring, revocable capability scoped to one review batch. Store only a SHA-256 hash of its random token in D1. Never expose a workspace-wide API key.
