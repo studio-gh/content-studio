@@ -30,7 +30,7 @@ function getMultiSelect(property) {
 }
 
 function getFiles(property) {
-  if (!property || property.type !== "files") return [];
+  if (!property || (property.type !== "files" && property.type !== "file")) return [];
   return (property.files || []).map(item => ({
     name: item.name || "",
     url: item.file?.url || item.external?.url || null,
