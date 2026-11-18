@@ -62,14 +62,14 @@
  </section>
 </main>
 </div>
-<div class="modal" id="modal" aria-hidden="true"><button class="modal-close" id="closeModal" aria-label="Fechar">×</button><aside class="dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-image" id="modalImage"></div><div class="modal-info"><div class="review-kicker">Prévia da publicação</div><div class="eyebrow" id="modalEditorial">PUBLICAÇÃO</div><h3 id="modalTitle"></h3><span class="status-tag" id="modalStatus"></span><p id="modalDate"></p><div class="detail-list" id="modalDetails"></div><section class="review-copy" id="reviewCopy"><div class="review-kicker">Legenda e texto do conteúdo</div><p id="reviewCopyText">Carregando o texto do registro…</p></section><div class="review-context"><strong>Revisão do conteúdo</strong><p>Abra o registro no Notion para consultar o material completo, deixar comentários e solicitar ajustes. O status e as alterações continuam sincronizados pela base original.</p></div><div class="review-actions"><a class="btn primary" id="notionLink" href="#" target="_blank" rel="noopener">Revisar no Notion ↗</a><button class="btn" id="closeReview" type="button">Voltar ao planejamento</button></div><div class="notice">Esta prévia ainda não registra aprovações externas. O fluxo de aprovação com permissões e histórico será implementado na próxima etapa.</div></div></aside></div>
+<div class="modal" id="modal" aria-hidden="true"><button class="modal-close" id="closeModal" aria-label="Fechar">×</button><aside class="dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-image" id="modalImage"></div><div class="modal-info"><div class="review-kicker">Prévia da publicação</div><div class="eyebrow" id="modalEditorial">PUBLICAÇÃO</div><h3 id="modalTitle"></h3><span class="status-tag" id="modalStatus"></span><p id="modalDate"></p><div class="detail-list" id="modalDetails"></div><section class="review-copy" id="reviewCopy"><div class="review-kicker">Legenda e texto do conteúdo</div><p id="reviewCopyText">Carregando o texto do registro…</p></section><div class="review-context"><strong>Revisão do conteúdo</strong><p>Abra o registro no Notion para consultar o material completo, deixar comentários e solicitar ajustes. O status e as alterações continuam sincronizados pela base original.</p></div><div class="review-actions"><a class="btn primary" id="notionLink" href="#" target="_blank" rel="noopener">Revisar no Notion ↗</a><button class="btn" id="previousPost" type="button" aria-label="Publicação anterior">← Anterior</button><button class="btn" id="nextPost" type="button" aria-label="Próxima publicação">Próxima →</button><button class="btn" id="closeReview" type="button">Voltar ao planejamento</button></div><div class="notice">Esta prévia ainda não registra aprovações externas. O fluxo de aprovação com permissões e histórico será implementado na próxima etapa.</div></div></aside></div>
 <script>
 (function(){
 "use strict";
 const API_BASE="https://content-studio-api.studio-gh.workers.dev";
 const $=id=>document.getElementById(id);
 const esc=value=>String(value==null?"":value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
-const state={posts:[],profile:null,view:"calendar",month:new Date(new Date().getFullYear(),new Date().getMonth(),1),lastUpdated:null,modalRequestId:0,lastFocusedElement:null};
+const state={posts:[],profile:null,view:"calendar",month:new Date(new Date().getFullYear(),new Date().getMonth(),1),lastUpdated:null,modalRequestId:0,lastFocusedElement:null,activePostId:null};
 const monthFmt=new Intl.DateTimeFormat("pt-BR",{month:"long",year:"numeric"});
 const dateFmt=new Intl.DateTimeFormat("pt-BR",{day:"2-digit",month:"short",year:"numeric"});
 function parseDate(value){if(!value)return null;const parts=String(value).slice(0,10).split("-").map(Number);if(parts.length!==3||!parts[0]||!parts[1]||!parts[2])return null;return new Date(parts[0],parts[1]-1,parts[2],12)}
@@ -108,8 +108,20 @@ function renderPillars(){
  const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
  $("pillarList").innerHTML=entries.length?entries.map(([name,count])=>'<span class="pillar-chip">'+esc(name)+' <b>'+count+'</b></span>').join(""):'<span class="pillar-chip">Nenhum pilar identificado</span>';
 }
+function navigablePosts(){
+ const posts=state.view==="feed"?filteredPosts(false):filteredPosts(true);
+ return posts.slice().sort((a,b)=>state.view==="feed"?((Number.isFinite(a.order)?a.order:Number.MAX_SAFE_INTEGER)-(Number.isFinite(b.order)?b.order:Number.MAX_SAFE_INTEGER)||String(a.date||"").localeCompare(String(b.date||""))):String(a.date||"").localeCompare(String(b.date||"")));
+}
+function updateModalNavigation(){
+ const posts=navigablePosts(),index=posts.findIndex(item=>item.id===state.activePostId);
+ $("previousPost").disabled=index<=0;$("nextPost").disabled=index<0||index>=posts.length-1;
+}
+function moveModal(direction){
+ const posts=navigablePosts(),index=posts.findIndex(item=>item.id===state.activePostId),next=posts[index+direction];
+ if(next)openPost(next);
+}
 async function openPost(post){
- const requestId=++state.modalRequestId;state.lastFocusedElement=document.activeElement;
+ const requestId=++state.modalRequestId;state.lastFocusedElement=document.activeElement;state.activePostId=post.id;updateModalNavigation();
  setText("modalEditorial",post.editorial||post.pillar||"PUBLICAÇÃO");setText("modalTitle",post.title||"Publicação sem título");
  setText("modalStatus",statusText(post.status));$("modalStatus").className="status-tag "+statusClass(post.status);
  const date=parseDate(post.date);setText("modalDate",date?dateFmt.format(date):"Sem data definida");
@@ -191,7 +203,7 @@ $("prevMonth").addEventListener("click",()=>{state.month=new Date(state.month.ge
 $("nextMonth").addEventListener("click",()=>{state.month=new Date(state.month.getFullYear(),state.month.getMonth()+1,1);renderCalendar()});
 $("thisMonth").addEventListener("click",()=>{state.month=new Date(new Date().getFullYear(),new Date().getMonth(),1);renderCalendar()});
 document.addEventListener("click",event=>{const target=event.target.closest("[data-post]");if(!target)return;const post=state.posts.find(item=>item.id===target.dataset.post);if(post)openPost(post)});
-$("closeModal").addEventListener("click",closeModal);$("closeReview").addEventListener("click",closeModal);$("modal").addEventListener("click",event=>{if(event.target===$("modal"))closeModal()});document.addEventListener("keydown",event=>{if(event.key==="Escape")closeModal()});
+$("closeModal").addEventListener("click",closeModal);$("closeReview").addEventListener("click",closeModal);$("previousPost").addEventListener("click",()=>moveModal(-1));$("nextPost").addEventListener("click",()=>moveModal(1));$("modal").addEventListener("click",event=>{if(event.target===$("modal"))closeModal()});document.addEventListener("keydown",event=>{if(event.key==="Escape")closeModal();else if($("modal").classList.contains("open")&&event.key==="ArrowLeft")moveModal(-1);else if($("modal").classList.contains("open")&&event.key==="ArrowRight")moveModal(1)});
 load();
 })();
 </script>
