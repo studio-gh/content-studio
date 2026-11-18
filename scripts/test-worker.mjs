@@ -36,6 +36,11 @@ const env = {
     }
   }
 };
+const accessRequest = (url, init = {}) => {
+  const headers = new Headers(init.headers || {});
+  headers.set("Cf-Access-Jwt-Assertion", accessToken);
+  return new Request(url, { ...init, headers });
+};
 const authorizedRequest = (url, init = {}) => {
   const headers = new Headers(init.headers || {});
   headers.set("Authorization", `Bearer ${accessToken}`);
@@ -146,7 +151,7 @@ const reviewerResponse = await worker.fetch(authorizedRequest("https://worker.te
 assert.equal(reviewerResponse.status, 403, "reviewer role must not access the studio workspace API");
 mockMemberRole = "editor";
 
-const feedResponse = await worker.fetch(authorizedRequest("https://worker.test/api/feed?limit=100"), env);
+const feedResponse = await worker.fetch(accessRequest("https://worker.test/api/feed?limit=100"), env);
 assert.equal(feedResponse.status, 200);
 const feed = await feedResponse.json();
 assert.equal(feed.posts.length, 1);
