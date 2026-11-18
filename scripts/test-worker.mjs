@@ -140,5 +140,7 @@ assert.equal(writeResponse.status, 405);
 console.log("PASS: health without Notion secret");
 console.log("PASS: feed mapping, 100-item limit, Stories, pillar, order and refreshed file URL");
 console.log("PASS: paginated page body extraction for review panel");
-console.log("PASS: profile mapping");\nconsole.log("PASS: read-only Library API mapping");\nconsole.log("PASS: read-only Ideas API mapping");
+console.log("PASS: profile mapping");
+console.log("PASS: read-only Library API mapping");
+console.log("PASS: read-only Ideas API mapping");
 console.log("PASS: write route rejected");
