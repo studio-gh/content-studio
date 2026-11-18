@@ -20,7 +20,7 @@ Workspace visual do Content Studio, com calendário editorial e prévia 3:4 do f
 
 ## Multi-workspace e revisão de clientes
 
-Foi adicionada a fundação de schema D1 em `migrations/0001_workspace_review_foundation.sql`, cobrindo workspaces, membros e papéis, conexões Notion por workspace, lotes de revisão, itens, eventos imutáveis e links de revisão com hash e expiração.
+A migration `migrations/0001_workspace_review_foundation.sql` define workspaces, membros e papéis, conexões Notion por workspace, lotes de revisão, itens, eventos imutáveis e links de revisão com hash e expiração. A imutabilidade de `review_events` agora também é protegida por triggers no próprio banco.
 
 A arquitetura e as regras de segurança estão documentadas em `docs/security-and-review-architecture.md`. **A migration ainda não foi aplicada e a API ainda não usa essas tabelas.** A autenticação precisa validar criptograficamente o JWT do Cloudflare Access, resolver o workspace e aplicar permissões no servidor antes de liberar qualquer dado privado ou ação de cliente.
 
@@ -42,21 +42,25 @@ A API ainda não deve ser considerada pronta para múltiplos clientes. OAuth do 
 ## Validação
 
 O GitHub Actions executa:
-- sintaxe do Worker;
-- sintaxe dos scripts da interface;
+- sintaxe do Worker e dos scripts da interface;
+- testes do Worker com respostas simuladas do Notion;
 - separação de Stories entre calendário e grade;
 - mapeamento e ordenação do feed;
 - ausência da rota pública de escrita insegura;
-- ausência de token do Notion no HTML.
+- ausência de token do Notion no HTML;
+- execução real da migration em SQLite e validação das constraints do schema.
 
 ## Pendências antes de publicar
 
-1. Configurar e publicar o Worker no Cloudflare com `NOTION_TOKEN`.
-2. Confirmar a URL do Worker e configurar `API_BASE` na interface.
-3. Validar resposta real do Worker, perfil, imagens e URLs assinadas em navegador.
-4. Testar desktop e celular.
-5. Criar D1, aplicar a migration e implementar validação JWT do Cloudflare Access, resolução de workspace e permissões server-side.\n6. Implementar OAuth/conexão Notion isolada por workspace e criptografia dos tokens.\n7. Implementar revisão do cliente com links expirados/revogáveis e histórico append-only.
-6. Implementar a biblioteca de conteúdo e a experiência guiada de onboarding.
-7. Separar dados demonstrativos dos dados de cada marca.
+1. Configurar D1, aplicar a migration e implementar validação JWT do Cloudflare Access, resolução de workspace e permissões server-side.
+2. Implementar OAuth/conexão Notion isolada por workspace e criptografia dos tokens.
+3. Publicar o Worker com secrets configurados e validar a resposta real da API.
+4. Separar conteúdo demonstrativo dos dados reais de cada marca.
+5. Revisar a Biblioteca de Conteúdo e o onboarding, preservando o HTML congelado.
+6. Validar leitura e escrita antes de descongelar a prévia do Instagram.
+7. Implementar a experiência de ideias e a biblioteca via API segura.
+8. Testar a Central da Marca com uma pessoa iniciante e reduzir texto se necessário.
+9. Definir preço, checkout, entrega e suporte.
+10. Preparar campanha de lançamento.
 
 A versão publicada não deve ser substituída até a conclusão dessas validações.
