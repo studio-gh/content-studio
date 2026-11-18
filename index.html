@@ -31,7 +31,7 @@
 <div class="shell">
 <header class="topbar">
  <div class="brand"><div class="brand-mark">c.</div><div><div class="brand-name">content studio</div><div class="brand-sub">your creative workspace</div></div></div>
- <div class="top-right"><span class="sync" id="syncStatus">Conectando ao Notion…</span><button class="btn" id="refresh" type="button">↻ Atualizar</button></div>
+ <div class="top-right"><span class="sync" id="syncStatus" role="status" aria-live="polite">Conectando ao Notion…</span><button class="btn" id="refresh" type="button">↻ Atualizar</button></div>
 </header>
 <main class="layout">
  <section class="welcome"><div><div class="eyebrow">Ambiente de demonstração · Seu espaço criativo</div><h1>Seu conteúdo, em perspectiva.</h1><p>Uma visão clara do que você está criando, do que vem por aí e de como sua marca está aparecendo no Instagram.</p></div><button class="btn primary" id="openNotion" type="button">Abrir Content Studio no Notion ↗</button></section>
@@ -48,13 +48,13 @@
  </section>
  <section class="workspace">
   <div class="workspace-head"><div class="workspace-title"><h2>Planejamento editorial</h2><p>Suas ideias e publicações organizadas em um só lugar.</p></div><div class="view-switch" role="tablist" aria-label="Visualização"><button class="view-btn active" data-view="calendar" role="tab" aria-selected="true">▦ Calendário</button><button class="view-btn" data-view="feed" role="tab" aria-selected="false">▤ Prévia do feed</button></div></div>
-  <div class="toolbar"><div class="filters"><input class="field search" id="search" type="search" placeholder="Buscar publicação…" aria-label="Buscar publicação"><select class="field" id="editorialFilter" aria-label="Filtrar por editoria"><option value="">Todas as editorias</option></select><select class="field" id="formatFilter" aria-label="Filtrar por formato"><option value="">Todos os formatos</option></select><select class="field" id="statusFilter" aria-label="Filtrar por status"><option value="">Todos os status</option><option>Ideia</option><option>Em produção</option><option>Pronto</option></select></div><span class="toolbar-note" id="resultCount">Carregando conteúdos</span></div>
+  <div class="toolbar"><div class="filters"><input class="field search" id="search" type="search" placeholder="Buscar publicação…" aria-label="Buscar publicação"><select class="field" id="editorialFilter" aria-label="Filtrar por editoria"><option value="">Todas as editorias</option></select><select class="field" id="formatFilter" aria-label="Filtrar por formato"><option value="">Todos os formatos</option></select><select class="field" id="statusFilter" aria-label="Filtrar por status"><option value="">Todos os status</option><option>Ideia</option><option>Em produção</option><option>Pronto</option></select></div><span class="toolbar-note" id="resultCount" aria-live="polite">Carregando conteúdos</span></div>
   <section id="calendarView" class="calendar-wrap">
    <div class="month-nav"><div class="month-label" id="monthLabel">—</div><div class="month-actions"><button class="icon-btn" id="prevMonth" aria-label="Mês anterior">‹</button><button class="btn today-btn" id="thisMonth">Hoje</button><button class="icon-btn" id="nextMonth" aria-label="Próximo mês">›</button></div></div>
    <div class="calendar" id="calendarGrid"><div class="loading">Carregando calendário…</div></div>
   </section>
   <section id="feedView" class="feed-wrap hidden">
-   <div class="feed-intro"><div><strong>Como seu perfil está tomando forma</strong><br><span>Stories ficam no calendário e não aparecem nesta grade.</span></div><span id="feedCount"></span></div>
+   <div class="feed-intro"><div><strong>Como seu perfil está tomando forma</strong><br><span>Stories ficam no calendário e não aparecem nesta grade.</span></div><span id="feedCount" aria-live="polite"></span></div>
    <div class="feed-grid" id="feedGrid"><div class="loading">Carregando prévia…</div></div>
   </section>
   <section class="pillar-row"><div class="pillar-head"><strong>Distribuição por pilar</strong><span>Visão dos conteúdos planejados</span></div><div class="pillars" id="pillarList"><span class="pillar-chip">Aguardando dados…</span></div></section>
@@ -69,7 +69,7 @@
 const API_BASE="https://content-studio-api.studio-gh.workers.dev";
 const $=id=>document.getElementById(id);
 const esc=value=>String(value==null?"":value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
-const state={posts:[],profile:null,view:"calendar",month:new Date(new Date().getFullYear(),new Date().getMonth(),1),lastUpdated:null};
+const state={posts:[],profile:null,view:"calendar",month:new Date(new Date().getFullYear(),new Date().getMonth(),1),lastUpdated:null,modalRequestId:0,lastFocusedElement:null};
 const monthFmt=new Intl.DateTimeFormat("pt-BR",{month:"long",year:"numeric"});
 const dateFmt=new Intl.DateTimeFormat("pt-BR",{day:"2-digit",month:"short",year:"numeric"});
 function parseDate(value){if(!value)return null;const parts=String(value).slice(0,10).split("-").map(Number);if(parts.length!==3||!parts[0]||!parts[1]||!parts[2])return null;return new Date(parts[0],parts[1]-1,parts[2],12)}
@@ -109,6 +109,7 @@ function renderPillars(){
  $("pillarList").innerHTML=entries.length?entries.map(([name,count])=>'<span class="pillar-chip">'+esc(name)+' <b>'+count+'</b></span>').join(""):'<span class="pillar-chip">Nenhum pilar identificado</span>';
 }
 async function openPost(post){
+ const requestId=++state.modalRequestId;state.lastFocusedElement=document.activeElement;
  setText("modalEditorial",post.editorial||post.pillar||"PUBLICAÇÃO");setText("modalTitle",post.title||"Publicação sem título");
  setText("modalStatus",statusText(post.status));$("modalStatus").className="status-tag "+statusClass(post.status);
  const date=parseDate(post.date);setText("modalDate",date?dateFmt.format(date):"Sem data definida");
@@ -122,15 +123,17 @@ async function openPost(post){
   while(hasMore&&pages<10){
    const endpoint=API_BASE+"/api/post/"+encodeURIComponent(post.id)+(cursor?"?cursor="+encodeURIComponent(cursor):"");
    const response=await fetch(endpoint,{cache:"no-store"});
+   if(requestId!==state.modalRequestId)return;
    if(!response.ok)throw new Error("Conteúdo indisponível");
-   const data=await response.json();if(!data.ok)throw new Error("Conteúdo indisponível");
+   const data=await response.json();if(requestId!==state.modalRequestId)return;if(!data.ok)throw new Error("Conteúdo indisponível");
    blocks.push(...(data.content||[]));cursor=data.nextCursor||null;hasMore=Boolean(data.hasMore&&cursor);pages++;
   }
   const text=blocks.map(block=>block.text).filter(Boolean).join("\n\n");
+  if(requestId!==state.modalRequestId)return;
   setText("reviewCopyText",(text||"Este registro ainda não tem texto no corpo da página do Notion.")+(hasMore?"\n\nPrévia parcial: o registro tem mais conteúdo do que esta janela consegue carregar. Abra o Notion para consultar o restante.":""));
- }catch(error){setText("reviewCopyText","Não foi possível carregar o texto agora. Abra o registro no Notion para consultar a legenda e o briefing.");}
+ }catch(error){if(requestId===state.modalRequestId)setText("reviewCopyText","Não foi possível carregar o texto agora. Abra o registro no Notion para consultar a legenda e o briefing.");}
 }
-function closeModal(){$("modal").classList.remove("open");$("modal").setAttribute("aria-hidden","true");document.body.style.overflow=""}
+function closeModal(){state.modalRequestId++;$("modal").classList.remove("open");$("modal").setAttribute("aria-hidden","true");document.body.style.overflow="";if(state.lastFocusedElement&&typeof state.lastFocusedElement.focus==="function")state.lastFocusedElement.focus();state.lastFocusedElement=null;}
 function renderCalendar(){
  const year=state.month.getFullYear(),month=state.month.getMonth();
  setText("monthLabel",monthFmt.format(state.month));
