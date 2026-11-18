@@ -18,6 +18,12 @@ Workspace visual do Content Studio, com calendário editorial e prévia 3:4 do f
 - `.github/workflows/deploy-worker.yml`: publicação manual do Worker via GitHub Actions.
 - `.github/workflows/validate.yml`: verificações de sintaxe e regras essenciais.
 
+## Multi-workspace e revisão de clientes
+
+Foi adicionada a fundação de schema D1 em `migrations/0001_workspace_review_foundation.sql`, cobrindo workspaces, membros e papéis, conexões Notion por workspace, lotes de revisão, itens, eventos imutáveis e links de revisão com hash e expiração.
+
+A arquitetura e as regras de segurança estão documentadas em `docs/security-and-review-architecture.md`. **A migration ainda não foi aplicada e a API ainda não usa essas tabelas.** A autenticação precisa validar criptograficamente o JWT do Cloudflare Access, resolver o workspace e aplicar permissões no servidor antes de liberar qualquer dado privado ou ação de cliente.
+
 ## Worker
 
 O Worker requer o secret `NOTION_TOKEN`. O token deve permanecer exclusivamente nos secrets do Cloudflare.
@@ -49,7 +55,7 @@ O GitHub Actions executa:
 2. Confirmar a URL do Worker e configurar `API_BASE` na interface.
 3. Validar resposta real do Worker, perfil, imagens e URLs assinadas em navegador.
 4. Testar desktop e celular.
-5. Projetar autenticação segura antes de implementar escrita, criação de ideias e drag-and-drop persistente.
+5. Criar D1, aplicar a migration e implementar validação JWT do Cloudflare Access, resolução de workspace e permissões server-side.\n6. Implementar OAuth/conexão Notion isolada por workspace e criptografia dos tokens.\n7. Implementar revisão do cliente com links expirados/revogáveis e histórico append-only.
 6. Implementar a biblioteca de conteúdo e a experiência guiada de onboarding.
 7. Separar dados demonstrativos dos dados de cada marca.
 
