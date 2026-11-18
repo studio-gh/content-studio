@@ -71,6 +71,7 @@ globalThis.fetch = async (input, init = {}) => {
     const dataSourceId = url.split("/data_sources/")[1].split("/")[0];
     if (dataSourceId === "3d40dbe6-469b-44ef-b678-8fa30f9ce7f2") return Response.json({ results: [libraryItem], has_more: false });
     if (dataSourceId === "ec75898c-2fbc-4d40-8be0-19f8e3ac01bb") return Response.json({ results: [ideaItem], has_more: false });
+    if (dataSourceId === "e82f8a29-82ef-4397-aebf-cd62f1222cc4") return Response.json({ results: [profile], has_more: false });
     feedQuerySizes.push(Number(new URL(url).searchParams.get("page_size") || JSON.parse(init.body || "{}").page_size));
     return Response.json({ results: [post], has_more: false, next_cursor: null });
   }
