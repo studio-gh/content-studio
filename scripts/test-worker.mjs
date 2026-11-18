@@ -37,10 +37,40 @@ const profile = {
 };
 
 const feedQuerySizes = [];
+const libraryItem = {
+  id: "library-item-1",
+  url: "https://www.notion.so/library-item-1",
+  properties: {
+    "Nome": { type: "title", title: [{ plain_text: "Moodboard de campanha" }] },
+    "Tipo": { type: "select", select: { name: "Imagem" } },
+    "Categoria": { type: "select", select: { name: "Referências" } },
+    "Marca": { type: "select", select: { name: "Marca exemplo" } },
+    "Descrição": { type: "rich_text", rich_text: [{ plain_text: "Referência visual de teste." }] },
+    "Tags": { type: "multi_select", multi_select: [{ name: "Inspiração" }] },
+    "Link do Drive": { type: "url", url: "https://drive.google.com/example" },
+    "Arquivo": { type: "files", files: [{ type: "external", name: "moodboard.jpg", external: { url: "https://example.com/moodboard.jpg" } }] }
+  }
+};
+const ideaItem = {
+  id: "idea-item-1",
+  url: "https://www.notion.so/idea-item-1",
+  created_time: "2026-11-18T10:00:00.000Z",
+  properties: {
+    "Ideia": { type: "title", title: [{ plain_text: "Série de referências do mês" }] },
+    "Anotação": { type: "rich_text", rich_text: [{ plain_text: "Reunir descobertas em uma publicação recorrente." }] },
+    "Tema": { type: "select", select: { name: "Design" } },
+    "Status": { type: "status", status: { name: "Nova" } },
+    "Origem": { type: "url", url: "https://example.com/reference" },
+    "Criada em": { type: "created_time", created_time: "2026-11-18T10:00:00.000Z" }
+  }
+};
 
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);
   if (url.includes("/data_sources/")) {
+    const dataSourceId = url.split("/data_sources/")[1].split("/")[0];
+    if (dataSourceId === "3d40dbe6-469b-44ef-b678-8fa30f9ce7f2") return Response.json({ results: [libraryItem], has_more: false });
+    if (dataSourceId === "ec75898c-2fbc-4d40-8be0-19f8e3ac01bb") return Response.json({ results: [ideaItem], has_more: false });
     feedQuerySizes.push(Number(new URL(url).searchParams.get("page_size") || JSON.parse(init.body || "{}").page_size));
     return Response.json({ results: [post], has_more: false, next_cursor: null });
   }
@@ -88,11 +118,26 @@ const profileData = await profileResponse.json();
 assert.equal(profileData.profile.name, "Marca Teste");
 assert.equal(profileData.profile.username, "marca.teste");
 
+const libraryResponse = await worker.fetch(new Request("https://worker.test/api/library"), { NOTION_TOKEN: "mock-token" });
+assert.equal(libraryResponse.status, 200);
+const library = await libraryResponse.json();
+assert.equal(library.items[0].name, "Moodboard de campanha");
+assert.equal(library.items[0].category, "Referências");
+assert.equal(library.items[0].previewUrl, "https://example.com/moodboard.jpg");
+assert.equal(library.items[0].driveUrl, "https://drive.google.com/example");
+
+const ideasResponse = await worker.fetch(new Request("https://worker.test/api/ideas"), { NOTION_TOKEN: "mock-token" });
+assert.equal(ideasResponse.status, 200);
+const ideas = await ideasResponse.json();
+assert.equal(ideas.items[0].title, "Série de referências do mês");
+assert.equal(ideas.items[0].theme, "Design");
+assert.equal(ideas.items[0].status, "Nova");
+
 const writeResponse = await worker.fetch(new Request("https://worker.test/api/reorder", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }), { NOTION_TOKEN: "mock-token" });
 assert.equal(writeResponse.status, 405);
 
 console.log("PASS: health without Notion secret");
 console.log("PASS: feed mapping, 100-item limit, Stories, pillar, order and refreshed file URL");
 console.log("PASS: paginated page body extraction for review panel");
-console.log("PASS: profile mapping");
+console.log("PASS: profile mapping");\nconsole.log("PASS: read-only Library API mapping");\nconsole.log("PASS: read-only Ideas API mapping");
 console.log("PASS: write route rejected");
