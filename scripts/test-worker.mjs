@@ -22,6 +22,8 @@ const jwtPayload = base64url(JSON.stringify({
 }));
 const jwtInput = `${jwtHeader}.${jwtPayload}`;
 const accessToken = `${jwtInput}.${sign("RSA-SHA256", Buffer.from(jwtInput), privateKey).toString("base64url")}`;
+let mockMemberRole = "editor";
+let mockMemberExists = true;
 const env = {
   NOTION_TOKEN: "mock-token",
   ACCESS_TEAM_DOMAIN: "test.cloudflareaccess.com",
@@ -29,7 +31,7 @@ const env = {
   DB: {
     prepare() {
       return { bind() { return { async first() {
-        return { member_id: "member-1", workspace_id: "workspace-1", role: "editor", email: "editor@example.com", workspace_slug: "workspace-demo" };
+        return mockMemberExists ? { member_id: "member-1", workspace_id: "workspace-1", role: mockMemberRole, email: "editor@example.com", workspace_slug: "workspace-demo" } : null;
       } }; } };
     }
   }
@@ -130,7 +132,19 @@ assert.equal(health.status, 200);
 assert.equal((await health.json()).authenticationConfigured, false);
 
 const deniedResponse = await worker.fetch(new Request("https://worker.test/api/feed"), env);
+
 assert.equal(deniedResponse.status, 401, "private endpoints must reject missing Access JWT");
+const tamperedToken = `${jwtHeader}.${jwtPayload}.${Buffer.alloc(256, 0).toString("base64url")}`;
+const tamperedResponse = await worker.fetch(new Request("https://worker.test/api/feed", { headers: { Authorization: `Bearer ${tamperedToken}` } }), env);
+assert.equal(tamperedResponse.status, 401, "private endpoints must reject invalid JWT signatures");
+mockMemberExists = false;
+const nonMemberResponse = await worker.fetch(authorizedRequest("https://worker.test/api/feed"), env);
+assert.equal(nonMemberResponse.status, 401, "private endpoints must reject users without active workspace membership");
+mockMemberExists = true;
+mockMemberRole = "reviewer";
+const reviewerResponse = await worker.fetch(authorizedRequest("https://worker.test/api/feed"), env);
+assert.equal(reviewerResponse.status, 403, "reviewer role must not access the studio workspace API");
+mockMemberRole = "editor";
 
 const feedResponse = await worker.fetch(authorizedRequest("https://worker.test/api/feed?limit=100"), env);
 assert.equal(feedResponse.status, 200);
