@@ -12,7 +12,7 @@ Workspace visual do Content Studio, com calendário editorial e prévia 3:4 do f
 - O painel de revisão permite navegar entre publicações com botões anterior/próxima ou pelas setas esquerda/direita.
 - Ao fechar o painel, o foco retorna ao ponto de origem; respostas antigas são ignoradas quando a pessoa troca rapidamente de publicação.
 - URLs de arquivos do Notion são solicitadas novamente a cada sincronização para evitar depender de links assinados antigos.
-- API somente leitura nesta etapa. As rotas privadas agora exigem JWT do Cloudflare Access validado criptograficamente e associação ativa no D1 (`workspace_members`). O painel de revisão não registra aprovações externas; comentários e alterações são feitos no registro original do Notion. Não há edição persistente, reordenação por arrastar ou criação de ideias pela interface.
+- API somente leitura nesta etapa. As rotas privadas exigem JWT do Cloudflare Access validado criptograficamente e conferem o e-mail com `ACCESS_ALLOWED_EMAIL`. Não há dependência de D1 para o acesso do proprietário nesta versão. O painel de revisão não registra aprovações externas; comentários e alterações são feitos no registro original do Notion. Não há edição persistente, reordenação por arrastar ou criação de ideias pela interface.
 
 ## Estrutura
 
@@ -58,7 +58,7 @@ O GitHub Actions executa:
 
 ## Pendências antes de publicar
 
-1. Configurar D1, aplicar a migration e implementar validação JWT do Cloudflare Access, resolução de workspace e permissões server-side.
+1. Configurar Cloudflare Access e `ACCESS_ALLOWED_EMAIL` para o proprietário.
 2. Implementar OAuth/conexão Notion isolada por workspace e criptografia dos tokens.
 3. Publicar o Worker com secrets configurados e validar a resposta real da API.
 4. Separar conteúdo demonstrativo dos dados reais de cada marca.
