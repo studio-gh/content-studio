@@ -12,7 +12,7 @@ Workspace visual do Content Studio, com calendário editorial e prévia 3:4 do f
 - O painel de revisão permite navegar entre publicações com botões anterior/próxima ou pelas setas esquerda/direita.
 - Ao fechar o painel, o foco retorna ao ponto de origem; respostas antigas são ignoradas quando a pessoa troca rapidamente de publicação.
 - URLs de arquivos do Notion são solicitadas novamente a cada sincronização para evitar depender de links assinados antigos.
-- API somente leitura nesta etapa. As rotas privadas exigem JWT do Cloudflare Access validado criptograficamente e conferem o e-mail com `ACCESS_ALLOWED_EMAIL`. Não há dependência de D1 para o acesso do proprietário nesta versão. O painel de revisão não registra aprovações externas; comentários e alterações são feitos no registro original do Notion. Não há edição persistente, reordenação por arrastar ou criação de ideias pela interface.
+- API somente leitura nesta etapa. As rotas privadas exigem JWT do Cloudflare Access validado criptograficamente e confiam na política de acesso configurada no Cloudflare. Não há dependência de D1 para o acesso do proprietário nesta versão. O painel de revisão não registra aprovações externas; comentários e alterações são feitos no registro original do Notion. Não há edição persistente, reordenação por arrastar ou criação de ideias pela interface.
 
 ## Estrutura
 
