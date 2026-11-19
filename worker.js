@@ -219,7 +219,7 @@ export default {
     } catch (authError) {
       const status = authError.message === "Autenticação necessária" ? 401 :
         authError.message.includes("não configurada") ? 503 :
-        authError.message.includes("não permite") ? 403 : 401;
+        authError.message.includes("não tem acesso") ? 403 : 401;
       return Response.json({ ok: false, error: authError.message }, { status, headers });
     }
     if (!env.NOTION_TOKEN) {
