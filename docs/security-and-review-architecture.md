@@ -7,8 +7,8 @@ Use Cloudflare Access for authenticated studio/team access and Cloudflare D1 for
 ## Identity and authorization
 
 - Studio/team members authenticate through Cloudflare Access.
-- The Worker implements cryptographic JWT verification for Cloudflare Access, validating the RS256 signature (JWKS), issuer, audience, expiry, and not-before before any private API operation.
-- Resolve the authenticated subject/email to an accepted, active `workspace_members` row on every protected request. Owner, admin, and editor roles can access studio routes; reviewer is denied from workspace-wide routes.
+- Cloudflare Access authenticates the request before it reaches the Worker. The Worker reads the validated identity through `ctx.access.getIdentity()`; no manual JWT parsing or separate Access secrets are required.
+- For the current single-owner version, the Worker treats the Cloudflare Access policy as the authorization boundary. Workspace membership lookup and role enforcement are future work for the multi-workspace version.
 - Enforce role permissions server-side: owner/admin manage workspace and invitations; editor manages content workflow; reviewer can read assigned review batches and submit review events only.
 - A reviewer link is a separate, expiring, revocable capability scoped to one review batch. Store only a SHA-256 hash of its random token in D1. Never expose a workspace-wide API key.
 - All Notion reads must use the Notion connection belonging to the resolved workspace. Never accept a Notion database ID or token directly from the browser.
@@ -31,16 +31,15 @@ Migration `migrations/0001_workspace_review_foundation.sql` defines:
 - append-only `review_events`
 - hashed, expiring `review_link_tokens`
 
-The migration is a schema foundation only. It has not been applied to a live database. The Worker now reads `workspace_members` and `workspaces` for authentication and workspace membership, but does not yet read or write review tables or use workspace-specific Notion connections.
+The migration is a schema foundation only. It has not been applied to a live database. The Worker does not yet read or write these tables. The current API uses one server-side Notion token and fixed data-source IDs.
 
 ## Required secrets and infrastructure
 
 Before enabling private data or client review:
 1. Create a D1 database and apply the migration.
 2. Configure Cloudflare Access for the studio application and Worker API.
-3. Configure the Access team domain and application audience in Worker environment.
-4. Bind D1 as `DB` and configure the Worker variables `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`.
-5. The Worker now validates JWT signatures and membership, but the Notion reads still use one global `NOTION_TOKEN` and fixed data-source IDs. This is a single-workspace gate, not complete multi-tenant isolation.
+3. Bind D1 as `DB` and implement workspace membership and role checks before enabling multiple workspaces.
+4. The current Worker reads the authenticated identity from `ctx.access`, while Notion reads still use one global `NOTION_TOKEN` and fixed data-source IDs. This is a single-owner gate, not complete multi-tenant isolation.
 6. Implement OAuth or a secure per-workspace Notion integration. Encrypt tokens at rest using a dedicated Worker secret; never store plaintext tokens in D1.
 7. Add rate limits, audit logging, and token revocation.
 8. Only then enable client review actions.
