@@ -1,42 +1,13 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { generateKeyPairSync, sign } from "node:crypto";
 
 const source = fs.readFileSync("worker.js", "utf8");
 const loaded = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
 const worker = loaded.default;
 
-const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-const publicJwk = publicKey.export({ format: "jwk" });
-publicJwk.kid = "content-studio-test-key";
-publicJwk.alg = "RS256";
-publicJwk.use = "sig";
-const base64url = value => Buffer.from(value).toString("base64url");
-const jwtHeader = base64url(JSON.stringify({ alg: "RS256", typ: "JWT", kid: publicJwk.kid }));
-const jwtPayload = base64url(JSON.stringify({
-  iss: "https://test.cloudflareaccess.com",
-  aud: ["content-studio-test-aud"],
-  sub: "user-subject-1",
-  email: "editor@example.com",
-  exp: Math.floor(Date.now() / 1000) + 300
-}));
-const jwtInput = `${jwtHeader}.${jwtPayload}`;
-const accessToken = `${jwtInput}.${sign("RSA-SHA256", Buffer.from(jwtInput), privateKey).toString("base64url")}`;
-const env = {
-  NOTION_TOKEN: "mock-token",
-  ACCESS_TEAM_DOMAIN: "test.cloudflareaccess.com",
-  ACCESS_AUD: "content-studio-test-aud"
-};
-const accessRequest = (url, init = {}) => {
-  const headers = new Headers(init.headers || {});
-  headers.set("Cf-Access-Jwt-Assertion", accessToken);
-  return new Request(url, { ...init, headers });
-};
-const authorizedRequest = (url, init = {}) => {
-  const headers = new Headers(init.headers || {});
-  headers.set("Authorization", `Bearer ${accessToken}`);
-  return new Request(url, { ...init, headers });
-};
+const env = { NOTION_TOKEN: "mock-token" };
+const accessContext = { access: { getIdentity: async () => ({ email: "owner@example.com" }) } };
+const authorizedRequest = (url, init = {}) => new Request(url, init);
 
 const post = {
   id: "page-post-1",
@@ -130,10 +101,7 @@ assert.equal((await health.json()).authenticationConfigured, false);
 const deniedResponse = await worker.fetch(new Request("https://worker.test/api/feed"), env);
 
 assert.equal(deniedResponse.status, 401, "private endpoints must reject missing Access JWT");
-const tamperedToken = `${jwtHeader}.${jwtPayload}.${Buffer.alloc(256, 0).toString("base64url")}`;
-const tamperedResponse = await worker.fetch(new Request("https://worker.test/api/feed", { headers: { Authorization: `Bearer ${tamperedToken}` } }), env);
-assert.equal(tamperedResponse.status, 401, "private endpoints must reject invalid JWT signatures");
-const feedResponse = await worker.fetch(accessRequest("https://worker.test/api/feed?limit=100"), env);
+const feedResponse = await worker.fetch(authorizedRequest("https://worker.test/api/feed?limit=100"), env, accessContext);
 assert.equal(feedResponse.status, 200);
 const feed = await feedResponse.json();
 assert.equal(feed.posts.length, 1);
@@ -143,23 +111,23 @@ assert.equal(feed.posts[0].pillar, "Produto");
 assert.equal(feed.posts[0].order, 3);
 assert.equal(feed.posts[0].previewImage, "https://files.notion.so/signed-preview");
 
-const copyResponse = await worker.fetch(authorizedRequest("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc"), env);
+const copyResponse = await worker.fetch(authorizedRequest("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc"), env, accessContext);
 assert.equal(copyResponse.status, 200);
 const copy = await copyResponse.json();
 assert.equal(copy.content[0].text, "Legenda de teste do post.");
 assert.equal(copy.hasMore, true);
 assert.equal(copy.nextCursor, "cursor-2");
-const nextCopyResponse = await worker.fetch(authorizedRequest("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc?cursor=cursor-2"), env);
+const nextCopyResponse = await worker.fetch(authorizedRequest("https://worker.test/api/post/12345678-1234-1234-1234-123456789abc?cursor=cursor-2"), env, accessContext);
 const nextCopy = await nextCopyResponse.json();
 assert.equal(nextCopy.content[0].text, "Detalhes adicionais.");
 assert.equal(nextCopy.hasMore, false);
 
-const profileResponse = await worker.fetch(authorizedRequest("https://worker.test/api/profile"), env);
+const profileResponse = await worker.fetch(authorizedRequest("https://worker.test/api/profile"), env, accessContext);
 const profileData = await profileResponse.json();
 assert.equal(profileData.profile.name, "Marca Teste");
 assert.equal(profileData.profile.username, "marca.teste");
 
-const libraryResponse = await worker.fetch(authorizedRequest("https://worker.test/api/library"), env);
+const libraryResponse = await worker.fetch(authorizedRequest("https://worker.test/api/library"), env, accessContext);
 assert.equal(libraryResponse.status, 200);
 const library = await libraryResponse.json();
 assert.equal(library.items[0].name, "Moodboard de campanha");
@@ -167,18 +135,18 @@ assert.equal(library.items[0].category, "Referências");
 assert.equal(library.items[0].previewUrl, "https://example.com/moodboard.jpg");
 assert.equal(library.items[0].driveUrl, "https://drive.google.com/example");
 
-const ideasResponse = await worker.fetch(authorizedRequest("https://worker.test/api/ideas"), env);
+const ideasResponse = await worker.fetch(authorizedRequest("https://worker.test/api/ideas"), env, accessContext);
 assert.equal(ideasResponse.status, 200);
 const ideas = await ideasResponse.json();
 assert.equal(ideas.items[0].title, "Série de referências do mês");
 assert.equal(ideas.items[0].theme, "Design");
 assert.equal(ideas.items[0].status, "Nova");
 
-const writeResponse = await worker.fetch(authorizedRequest("https://worker.test/api/reorder", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }), env);
+const writeResponse = await worker.fetch(authorizedRequest("https://worker.test/api/reorder", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }), env, accessContext);
 assert.equal(writeResponse.status, 405);
 
 console.log("PASS: health endpoint and fail-closed private route");
-console.log("PASS: cryptographic Cloudflare Access JWT validation");
+console.log("PASS: Cloudflare Access identity context validation");
 console.log("PASS: feed mapping, 100-item limit, Stories, pillar, order and refreshed file URL");
 console.log("PASS: paginated page body extraction for review panel");
 console.log("PASS: profile mapping");
