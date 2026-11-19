@@ -122,7 +122,7 @@ function renderIdeas(){
  $("ideasGrid").innerHTML=items.length?items.map(item=>'<article class="idea-card"><div class="idea-copy"><div class="idea-top"><span class="meta-chip">'+esc(item.theme||"Sem tema")+'</span><span class="idea-status">'+esc(item.status||"Nova")+'</span></div><h3>'+esc(item.title)+'</h3><p>'+esc(item.note||"Ideia guardada para desenvolver depois.")+'</p><a class="card-link" href="'+esc(item.notionUrl)+'" target="_blank" rel="noopener">Abrir ideia no Notion ↗</a></div></article>').join(""):'<div class="module-empty">Nenhuma ideia encontrada. Guarde uma nova ideia no Canto das Ideias do Notion.</div>';
 }
 async function loadCollection(endpoint){
- const response=await fetch(API_BASE+endpoint,{cache:"no-store"});
+ const response=await fetch(API_BASE+endpoint,{cache:"no-store",credentials:"include"});
  if(!response.ok)throw new Error("Não foi possível carregar "+endpoint);
  const data=await response.json();if(!data.ok)throw new Error(data.error||"Falha ao carregar "+endpoint);
  return data.items||[];
@@ -172,7 +172,7 @@ async function openPost(post){
   let cursor=null,blocks=[],pages=0,hasMore=true;
   while(hasMore&&pages<10){
    const endpoint=API_BASE+"/api/post/"+encodeURIComponent(post.id)+(cursor?"?cursor="+encodeURIComponent(cursor):"");
-   const response=await fetch(endpoint,{cache:"no-store"});
+   const response=await fetch(endpoint,{cache:"no-store",credentials:"include"});
    if(requestId!==state.modalRequestId)return;
    if(!response.ok)throw new Error("Conteúdo indisponível");
    const data=await response.json();if(requestId!==state.modalRequestId)return;if(!data.ok)throw new Error("Conteúdo indisponível");
@@ -218,7 +218,7 @@ function setView(view){
 async function load(){
  const button=$("refresh");button.disabled=true;button.textContent="Atualizando…";setText("syncStatus","Sincronizando com Notion…");
  try{
-  const responses=await Promise.all([fetch(API_BASE+"/api/profile",{cache:"no-store"}),fetch(API_BASE+"/api/feed?limit=100",{cache:"no-store"}),loadCollection("/api/library"),loadCollection("/api/ideas")]);
+  const responses=await Promise.all([fetch(API_BASE+"/api/profile",{cache:"no-store",credentials:"include"}),fetch(API_BASE+"/api/feed?limit=100",{cache:"no-store",credentials:"include"}),loadCollection("/api/library"),loadCollection("/api/ideas")]);
   if(!responses[0].ok)throw new Error("Perfil: resposta "+responses[0].status);
   if(!responses[1].ok)throw new Error("Conteúdos: resposta "+responses[1].status);
   const data=await Promise.all([responses[0].json(),responses[1].json()]);
