@@ -6,68 +6,6 @@ const PROFILE_DATA_SOURCE_ID = "e82f8a29-82ef-4397-aebf-cd62f1222cc4";
 const LIBRARY_DATA_SOURCE_ID = "3d40dbe6-469b-44ef-b678-8fa30f9ce7f2";
 const IDEAS_DATA_SOURCE_ID = "ec75898c-2fbc-4d40-8be0-19f8e3ac01bb";
 
-let accessJwksCache = null;
-let accessJwksFetchedAt = 0;
-
-function base64UrlToBytes(value) {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const binary = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
-  return Uint8Array.from(binary, char => char.charCodeAt(0));
-}
-
-function decodeJwtPart(value) {
-  return JSON.parse(new TextDecoder().decode(base64UrlToBytes(value)));
-}
-
-async function getAccessJwks(teamDomain) {
-  const now = Date.now();
-  if (accessJwksCache && now - accessJwksFetchedAt < 5 * 60 * 1000) return accessJwksCache;
-  const response = await fetch(`https://${teamDomain}/cdn-cgi/access/certs`);
-  if (!response.ok) throw new Error("Não foi possível validar a identidade");
-  accessJwksCache = await response.json();
-  accessJwksFetchedAt = now;
-  return accessJwksCache;
-}
-
-async function verifyAccessJwt(request, env) {
-  const teamDomain = String(env.ACCESS_TEAM_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const audience = String(env.ACCESS_AUD || "");
-  if (!teamDomain || !audience) throw new Error("Autenticação ainda não configurada");
-  const accessAssertion = request.headers.get("cf-access-jwt-assertion") || "";
-  const bearer = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  const token = accessAssertion || bearer;
-  if (!token || token.split(".").length !== 3) throw new Error("Autenticação necessária");
-
-  const [encodedHeader, encodedPayload, encodedSignature] = token.split(".");
-  const header = decodeJwtPart(encodedHeader);
-  const claims = decodeJwtPart(encodedPayload);
-  if (header.alg !== "RS256" || !header.kid) throw new Error("Token de acesso inválido");
-  const issuer = `https://${teamDomain}`;
-  const now = Math.floor(Date.now() / 1000);
-  const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (claims.iss !== issuer || !audiences.includes(audience) || !claims.sub ||
-      typeof claims.exp !== "number" || claims.exp <= now ||
-      (typeof claims.nbf === "number" && claims.nbf > now)) {
-    throw new Error("Token de acesso inválido ou expirado");
-  }
-
-  const jwks = await getAccessJwks(teamDomain);
-  const jwk = (jwks.keys || []).find(key => key.kid === header.kid && key.kty === "RSA");
-  if (!jwk) throw new Error("Chave de assinatura não encontrada");
-  const publicKey = await crypto.subtle.importKey(
-    "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]
-  );
-  const valid = await crypto.subtle.verify(
-    "RSASSA-PKCS1-v1_5",
-    publicKey,
-    base64UrlToBytes(encodedSignature),
-    new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`)
-  );
-  if (!valid) throw new Error("Assinatura do token inválida");
-  return { subject: claims.sub, email: String(claims.email || "").trim().toLowerCase() };
-}
-
-
 function getText(property) {
   if (!property) return "";
   if (property.type === "title" || property.type === "rich_text") {
@@ -189,13 +127,15 @@ function normalizeProfile(page) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const headers = {
       "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": "https://studio-gh.github.io",
+      "Access-Control-Allow-Credentials": "true",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Vary": "Origin"
     };
 
     if (request.method === "OPTIONS") return new Response(null, { headers });
@@ -203,18 +143,16 @@ export default {
       return Response.json({ ok: false, error: "Método não permitido" }, { status: 405, headers });
     }
     if (url.pathname === "/api/health") {
-      return Response.json({ ok: true, service: "content-studio-api", authenticationConfigured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD) }, { headers });
+      return Response.json({ ok: true, service: "content-studio-api", authenticationConfigured: true }, { headers });
     }
-    let identity;
     let workspaceMember;
     try {
-      identity = await verifyAccessJwt(request, env);
-      workspaceMember = { email: identity.email, role: "owner", workspace_slug: "studio" };
-    } catch (authError) {
-      const status = authError.message === "Autenticação necessária" ? 401 :
-        authError.message.includes("não configurada") ? 503 :
-        authError.message.includes("não tem acesso") ? 403 : 401;
-      return Response.json({ ok: false, error: authError.message }, { status, headers });
+      if (!ctx?.access) throw new Error("Autenticação necessária");
+      const identity = await ctx.access.getIdentity();
+      if (!identity?.email) throw new Error("Identidade autenticada indisponível");
+      workspaceMember = { email: String(identity.email).trim().toLowerCase(), role: "owner", workspace_slug: "studio" };
+    } catch {
+      return Response.json({ ok: false, error: "Autenticação necessária" }, { status: 401, headers });
     }
     if (!env.NOTION_TOKEN) {
       return Response.json({ ok: false, error: "Integração com Notion indisponível" }, { status: 503, headers });
