@@ -67,12 +67,6 @@ async function verifyAccessJwt(request, env) {
   return { subject: claims.sub, email: String(claims.email || "").trim().toLowerCase() };
 }
 
-function authorizeOwner(identity, env) {
-  const allowedEmail = String(env.ACCESS_ALLOWED_EMAIL || "").trim().toLowerCase();
-  if (!allowedEmail) throw new Error("E-mail autorizado não configurado");
-  if (!identity.email || identity.email !== allowedEmail) throw new Error("Esta conta não tem acesso ao Content Studio");
-  return { email: identity.email, role: "owner", workspace_slug: "studio" };
-}
 
 function getText(property) {
   if (!property) return "";
@@ -209,13 +203,13 @@ export default {
       return Response.json({ ok: false, error: "Método não permitido" }, { status: 405, headers });
     }
     if (url.pathname === "/api/health") {
-      return Response.json({ ok: true, service: "content-studio-api", authenticationConfigured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD && env.ACCESS_ALLOWED_EMAIL) }, { headers });
+      return Response.json({ ok: true, service: "content-studio-api", authenticationConfigured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD) }, { headers });
     }
     let identity;
     let workspaceMember;
     try {
       identity = await verifyAccessJwt(request, env);
-      workspaceMember = authorizeOwner(identity, env);
+      workspaceMember = { email: identity.email, role: "owner", workspace_slug: "studio" };
     } catch (authError) {
       const status = authError.message === "Autenticação necessária" ? 401 :
         authError.message.includes("não configurada") ? 503 :
