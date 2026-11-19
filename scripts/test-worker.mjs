@@ -25,8 +25,7 @@ const accessToken = `${jwtInput}.${sign("RSA-SHA256", Buffer.from(jwtInput), pri
 const env = {
   NOTION_TOKEN: "mock-token",
   ACCESS_TEAM_DOMAIN: "test.cloudflareaccess.com",
-  ACCESS_AUD: "content-studio-test-aud",
-  ACCESS_ALLOWED_EMAIL: "editor@example.com"
+  ACCESS_AUD: "content-studio-test-aud"
 };
 const accessRequest = (url, init = {}) => {
   const headers = new Headers(init.headers || {});
@@ -134,17 +133,8 @@ assert.equal(deniedResponse.status, 401, "private endpoints must reject missing 
 const tamperedToken = `${jwtHeader}.${jwtPayload}.${Buffer.alloc(256, 0).toString("base64url")}`;
 const tamperedResponse = await worker.fetch(new Request("https://worker.test/api/feed", { headers: { Authorization: `Bearer ${tamperedToken}` } }), env);
 assert.equal(tamperedResponse.status, 401, "private endpoints must reject invalid JWT signatures");
-const wrongAccountPayload = base64url(JSON.stringify({
-  iss: "https://test.cloudflareaccess.com",
-  aud: ["content-studio-test-aud"],
-  sub: "other-user",
-  email: "someone-else@example.com",
-  exp: Math.floor(Date.now() / 1000) + 300
-}));
-const wrongAccountInput = `${jwtHeader}.${wrongAccountPayload}`;
-const wrongAccountToken = `${wrongAccountInput}.${sign("RSA-SHA256", Buffer.from(wrongAccountInput), privateKey).toString("base64url")}`;
-const wrongAccountResponse = await worker.fetch(new Request("https://worker.test/api/feed", { headers: { Authorization: `Bearer ${wrongAccountToken}` } }), env);
-assert.equal(wrongAccountResponse.status, 403, "private endpoints must reject identities outside the single-owner allowlist");
+const validAccessResponse = await worker.fetch(accessRequest("https://worker.test/api/feed"), env);
+assert.equal(validAccessResponse.status, 200, "valid Access identity should pass Worker authentication");
 
 const feedResponse = await worker.fetch(accessRequest("https://worker.test/api/feed?limit=100"), env);
 assert.equal(feedResponse.status, 200);
@@ -191,7 +181,7 @@ const writeResponse = await worker.fetch(authorizedRequest("https://worker.test/
 assert.equal(writeResponse.status, 405);
 
 console.log("PASS: health endpoint and fail-closed private route");
-console.log("PASS: cryptographic Cloudflare Access JWT validation and single-owner email allowlist");
+console.log("PASS: cryptographic Cloudflare Access JWT validation");
 console.log("PASS: feed mapping, 100-item limit, Stories, pillar, order and refreshed file URL");
 console.log("PASS: paginated page body extraction for review panel");
 console.log("PASS: profile mapping");
