@@ -133,9 +133,6 @@ assert.equal(deniedResponse.status, 401, "private endpoints must reject missing 
 const tamperedToken = `${jwtHeader}.${jwtPayload}.${Buffer.alloc(256, 0).toString("base64url")}`;
 const tamperedResponse = await worker.fetch(new Request("https://worker.test/api/feed", { headers: { Authorization: `Bearer ${tamperedToken}` } }), env);
 assert.equal(tamperedResponse.status, 401, "private endpoints must reject invalid JWT signatures");
-const validAccessResponse = await worker.fetch(accessRequest("https://worker.test/api/feed"), env);
-assert.equal(validAccessResponse.status, 200, "valid Access identity should pass Worker authentication");
-
 const feedResponse = await worker.fetch(accessRequest("https://worker.test/api/feed?limit=100"), env);
 assert.equal(feedResponse.status, 200);
 const feed = await feedResponse.json();
