@@ -22,6 +22,12 @@ const jwtPayload = base64url(JSON.stringify({
 }));
 const jwtInput = `${jwtHeader}.${jwtPayload}`;
 const accessToken = `${jwtInput}.${sign("RSA-SHA256", Buffer.from(jwtInput), privateKey).toString("base64url")}`;
+const env = {
+  NOTION_TOKEN: "mock-token",
+  ACCESS_TEAM_DOMAIN: "test.cloudflareaccess.com",
+  ACCESS_AUD: "content-studio-test-aud",
+  ACCESS_ALLOWED_EMAIL: "editor@example.com"
+};
 const accessRequest = (url, init = {}) => {
   const headers = new Headers(init.headers || {});
   headers.set("Cf-Access-Jwt-Assertion", accessToken);
