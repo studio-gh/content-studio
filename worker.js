@@ -67,21 +67,11 @@ async function verifyAccessJwt(request, env) {
   return { subject: claims.sub, email: String(claims.email || "").trim().toLowerCase() };
 }
 
-async function resolveWorkspaceMember(identity, env) {
-  if (!env.DB) throw new Error("Banco de permissões indisponível");
-  const member = await env.DB.prepare(`
-    SELECT wm.id AS member_id, wm.workspace_id, wm.role, wm.email, w.slug AS workspace_slug
-    FROM workspace_members wm
-    JOIN workspaces w ON w.id = wm.workspace_id
-    WHERE wm.disabled_at IS NULL
-      AND wm.accepted_at IS NOT NULL
-      AND (wm.auth_subject = ? OR lower(wm.email) = ?)
-    ORDER BY CASE WHEN wm.auth_subject = ? THEN 0 ELSE 1 END
-    LIMIT 1
-  `).bind(identity.subject, identity.email, identity.subject).first();
-  if (!member) throw new Error("Pessoa sem acesso a este workspace");
-  if (!["owner", "admin", "editor"].includes(member.role)) throw new Error("Seu perfil não permite acessar o estúdio");
-  return member;
+function authorizeOwner(identity, env) {
+  const allowedEmail = String(env.ACCESS_ALLOWED_EMAIL || "").trim().toLowerCase();
+  if (!allowedEmail) throw new Error("E-mail autorizado não configurado");
+  if (!identity.email || identity.email !== allowedEmail) throw new Error("Esta conta não tem acesso ao Content Studio");
+  return { email: identity.email, role: "owner", workspace_slug: "studio" };
 }
 
 function getText(property) {
@@ -219,16 +209,16 @@ export default {
       return Response.json({ ok: false, error: "Método não permitido" }, { status: 405, headers });
     }
     if (url.pathname === "/api/health") {
-      return Response.json({ ok: true, service: "content-studio-api", authenticationConfigured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD && env.DB) }, { headers });
+      return Response.json({ ok: true, service: "content-studio-api", authenticationConfigured: Boolean(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD && env.ACCESS_ALLOWED_EMAIL) }, { headers });
     }
     let identity;
     let workspaceMember;
     try {
       identity = await verifyAccessJwt(request, env);
-      workspaceMember = await resolveWorkspaceMember(identity, env);
+      workspaceMember = authorizeOwner(identity, env);
     } catch (authError) {
       const status = authError.message === "Autenticação necessária" ? 401 :
-        authError.message.includes("não configurada") || authError.message.includes("indisponível") ? 503 :
+        authError.message.includes("não configurada") ? 503 :
         authError.message.includes("não permite") ? 403 : 401;
       return Response.json({ ok: false, error: authError.message }, { status, headers });
     }
