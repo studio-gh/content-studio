@@ -87,7 +87,7 @@ jobs:
             ['Append-only review event actions', /action IN \('approved', 'changes_requested', 'commented'\)/.test(sql)],
             ['Review link token hash stored', /token_hash TEXT NOT NULL UNIQUE/.test(sql)],
             ['Review links expire and revoke', /expires_at TEXT NOT NULL[\s\S]*?revoked_at TEXT/.test(sql)],
-            ['Architecture requires cryptographic JWT verification', doc.includes('cryptographic JWT verification')],
+            ['Architecture documents Cloudflare Access identity context', doc.includes('ctx.access.getIdentity()')],
             ['Architecture forbids plaintext Notion tokens', doc.includes('never store plaintext tokens')]
           ];
           for (const [label, ok] of checks) {
