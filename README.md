@@ -26,7 +26,7 @@ Workspace visual do Content Studio, com calendário editorial e prévia 3:4 do f
 
 A migration `migrations/0001_workspace_review_foundation.sql` define workspaces, membros e papéis, conexões Notion por workspace, lotes de revisão, itens, eventos imutáveis e links de revisão com hash e expiração. A imutabilidade de `review_events` agora também é protegida por triggers no próprio banco.
 
-A arquitetura e as regras de segurança estão documentadas em `docs/security-and-review-architecture.md`. **A migration ainda não foi aplicada e a API ainda não usa essas tabelas.** A autenticação precisa validar criptograficamente o JWT do Cloudflare Access, resolver o workspace e aplicar permissões no servidor antes de liberar qualquer dado privado ou ação de cliente.
+A arquitetura e as regras de segurança estão documentadas em `docs/security-and-review-architecture.md`. **A migration ainda não foi aplicada e a API ainda não usa essas tabelas.** Nesta versão de proprietário único, o Cloudflare Access protege o Worker e a API lê a identidade autenticada via `ctx.access`. Isso não substitui o isolamento por workspace e os papéis necessários para múltiplos clientes.
 
 ## Worker
 
@@ -58,9 +58,8 @@ O GitHub Actions executa:
 
 ## Pendências antes de publicar
 
-1. Confirmar que a política do Cloudflare Access permite apenas o e-mail do proprietário e que a sessão está ativa no navegador.
+1. Publicar o Worker com secrets configurados e validar a resposta real da API.
 2. Implementar OAuth/conexão Notion isolada por workspace e criptografia dos tokens.
-3. Publicar o Worker com secrets configurados e validar a resposta real da API.
 4. Separar conteúdo demonstrativo dos dados reais de cada marca.
 5. Revisar a Biblioteca de Conteúdo e o onboarding, preservando o HTML congelado.
 6. Validar leitura e escrita antes de descongelar a prévia do Instagram.
