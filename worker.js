@@ -143,7 +143,7 @@ export default {
       return Response.json({ ok: false, error: "Método não permitido" }, { status: 405, headers });
     }
     if (url.pathname === "/api/health") {
-      return Response.json({ ok: true, service: "content-studio-api", authenticationConfigured: true }, { headers });
+      return Response.json({ ok: true, service: "content-studio-api", authenticationConfigured: Boolean(ctx?.access) }, { headers });
     }
     let workspaceMember;
     try {
