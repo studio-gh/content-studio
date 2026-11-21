@@ -1,0 +1,97 @@
+name: Validate Content Studio
+
+on:
+  pull_request:
+  push:
+    branches:
+      - fix/feed-grid-data-mapping
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check Worker syntax
+        run: node --check worker.js
+
+      - name: Check inline application scripts
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const html = fs.readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
+          if (!scripts.length) throw new Error('Nenhum script encontrado em index.html');
+          scripts.forEach((match, index) => {
+            const file = '/tmp/content-studio-inline-' + index + '.js';
+            fs.writeFileSync(file, match[1]);
+            console.log('Validando ' + file);
+          });
+          NODE
+          for file in /tmp/content-studio-inline-*.js; do node --check "$file"; done
+
+      - name: Test Worker with mocked Notion responses
+        run: node scripts/test-worker.mjs
+
+      - name: Check critical product behavior
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const html = fs.readFileSync('index.html', 'utf8');
+          const worker = fs.readFileSync('worker.js', 'utf8');
+          const checks = [
+            ['Stories excluded from profile grid', /function filteredPosts\(includeStories\)[\s\S]*?includeStories\|\|!isStory\(p\)/.test(html)],
+            ['Feed order mapped from Notion', /order: typeof p\["Ordem no feed"\]\?\.number === "number"/.test(worker)],
+            ['Feed grid sorts by explicit order', /Number\.isFinite\(a\.order\)[\s\S]*?Number\.isFinite\(b\.order\)/.test(html)],
+            ['Review inspector is accessible', /role=\"dialog\" aria-modal=\"true\"/.test(html)],
+            ['Review modal ignores stale page responses', /modalRequestId[\s\S]*?if\(requestId!==state\.modalRequestId\)return/.test(html)],
+            ['Review modal restores keyboard focus on close', /state\.lastFocusedElement\.focus\(\)/.test(html)],
+            ['Review modal supports previous and next content navigation', /id="previousPost"/.test(html) && /id="nextPost"/.test(html)],
+            ['Review modal supports left and right keyboard navigation', /event\.key===\"ArrowLeft\"/.test(html) && /event\.key===\"ArrowRight\"/.test(html)],
+            ['Sync and result status are announced accessibly', /id="syncStatus" role="status" aria-live="polite"/.test(html) && /id="resultCount" aria-live="polite"/.test(html)],
+            ['Review panel fetches Notion page text', html.includes('/api/post/') && html.includes('reviewCopyText')],
+            ['Worker reads selected page blocks', worker.includes('/blocks/') && worker.includes('page_size: "100"') && worker.includes('next_cursor')],
+            ['No insecure public reorder endpoint', !/api\/reorder/.test(worker)],
+            ['Notion token not embedded in browser code', !/secret_[A-Za-z0-9]{20,}|ntn_[A-Za-z0-9]{20,}/.test(html)]
+          ];
+          for (const [label, ok] of checks) {
+            console.log((ok ? 'PASS' : 'FAIL') + ': ' + label);
+            if (!ok) process.exitCode = 1;
+          }
+          NODE
+
+      - name: Validate D1 migration with SQLite
+        run: |
+          python -m py_compile scripts/test-schema.py
+          python scripts/test-schema.py
+
+      - name: Validate workspace and review schema
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const sql = fs.readFileSync('migrations/0001_workspace_review_foundation.sql', 'utf8');
+          const doc = fs.readFileSync('docs/security-and-review-architecture.md', 'utf8');
+          const checks = [
+            ['Workspace isolation key', /workspace_id TEXT NOT NULL REFERENCES workspaces\(id\)/.test(sql)],
+            ['Role allowlist', /role IN \('owner', 'admin', 'editor', 'reviewer'\)/.test(sql)],
+            ['Append-only review event actions', /action IN \('approved', 'changes_requested', 'commented'\)/.test(sql)],
+            ['Review link token hash stored', /token_hash TEXT NOT NULL UNIQUE/.test(sql)],
+            ['Review links expire and revoke', /expires_at TEXT NOT NULL[\s\S]*?revoked_at TEXT/.test(sql)],
+            ['Architecture documents Cloudflare Access identity context', doc.includes('ctx.access.getIdentity()')],
+            ['Architecture forbids plaintext Notion tokens', doc.includes('never store plaintext tokens')]
+          ];
+          for (const [label, ok] of checks) {
+            console.log((ok ? 'PASS' : 'FAIL') + ': ' + label);
+            if (!ok) process.exitCode = 1;
+          }
+          NODE

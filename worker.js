@@ -1,7 +1,10 @@
 const NOTION_VERSION = "2022-06-28";
+const MAX_FEED_ITEMS = 100;
 
 const CONTENT_DATA_SOURCE_ID = "68e086ed-8655-413f-aca0-53fe36ad82e0";
-const PROFILE_DATABASE_ID = "bd79b8d1f3194107bb7a173511604c54";
+const PROFILE_DATA_SOURCE_ID = "e82f8a29-82ef-4397-aebf-cd62f1222cc4";
+const LIBRARY_DATA_SOURCE_ID = "3d40dbe6-469b-44ef-b678-8fa30f9ce7f2";
+const IDEAS_DATA_SOURCE_ID = "ec75898c-2fbc-4d40-8be0-19f8e3ac01bb";
 
 function getText(property) {
   if (!property) return "";
@@ -27,7 +30,7 @@ function getMultiSelect(property) {
 }
 
 function getFiles(property) {
-  if (!property || property.type !== "files") return [];
+  if (!property || (property.type !== "files" && property.type !== "file")) return [];
   return (property.files || []).map(item => ({
     name: item.name || "",
     url: item.file?.url || item.external?.url || null,
@@ -46,12 +49,12 @@ function normalizePost(page) {
     id: page.id,
     title: getText(p["Publicação"]) || "Publicação sem título",
     date: getDate(p["Data"]),
-    order: null,
+    order: typeof p["Ordem no feed"]?.number === "number" ? p["Ordem no feed"].number : null,
     editorial: getText(p["Editoria"]),
     format: getText(p["Formato"]),
     status: getText(p["Status"]),
     category: getText(p["Categoria"]),
-    pillar: getText(p["Pilar editorial"]),
+    pillar: getText(p["Pilar"]) || getText(p["Pilar editorial"]),
     objectives: getMultiSelect(p["Objetivos"]),
     tags: getMultiSelect(p["Tags"]),
     previewImage: files[0]?.url || null,
@@ -59,6 +62,49 @@ function normalizePost(page) {
     notionUrl: page.url,
     updatedAt: page.last_edited_time
   };
+}
+
+function normalizeLibraryItem(page) {
+  const p = page.properties || {};
+  const files = getFiles(p["Arquivo"]);
+  return {
+    id: page.id,
+    name: getText(p["Nome"]) || "Material sem título",
+    type: getText(p["Tipo"]),
+    category: getText(p["Categoria"]),
+    brand: getText(p["Marca"]),
+    description: getText(p["Descrição"]),
+    tags: getMultiSelect(p["Tags"]),
+    driveUrl: getPropertyValue(p["Link do Drive"]),
+    files,
+    previewUrl: files[0]?.url || null,
+    notionUrl: page.url,
+    updatedAt: page.last_edited_time
+  };
+}
+
+function normalizeIdea(page) {
+  const p = page.properties || {};
+  return {
+    id: page.id,
+    title: getText(p["Ideia"]) || "Ideia sem título",
+    note: getText(p["Anotação"]),
+    theme: getText(p["Tema"]),
+    status: getText(p["Status"]),
+    sourceUrl: getPropertyValue(p["Origem"]),
+    notionUrl: page.url,
+    createdAt: p["Criada em"]?.date?.start || page.created_time,
+    updatedAt: page.last_edited_time
+  };
+}
+
+function extractBlockText(block) {
+  const value = block?.[block.type];
+  if (!value) return "";
+  const rich = value.rich_text || value.title || [];
+  const text = rich.map(item => item.plain_text || item.text?.content || "").join("");
+  if (block.type === "child_page") return value.title || "";
+  return text;
 }
 
 function normalizeProfile(page) {
@@ -81,21 +127,35 @@ function normalizeProfile(page) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const headers = {
       "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type"
+      "Access-Control-Allow-Origin": "https://studio-gh.github.io",
+      "Access-Control-Allow-Credentials": "true",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Vary": "Origin"
     };
 
     if (request.method === "OPTIONS") return new Response(null, { headers });
-    if (request.method !== "GET" && request.method !== "POST") {
+    if (request.method !== "GET") {
       return Response.json({ ok: false, error: "Método não permitido" }, { status: 405, headers });
     }
+    if (url.pathname === "/api/health") {
+      return Response.json({ ok: true, service: "content-studio-api", authenticationConfigured: Boolean(ctx?.access) }, { headers });
+    }
+    let workspaceMember;
+    try {
+      if (!ctx?.access) throw new Error("Autenticação necessária");
+      const identity = await ctx.access.getIdentity();
+      if (!identity?.email) throw new Error("Identidade autenticada indisponível");
+      workspaceMember = { email: String(identity.email).trim().toLowerCase(), role: "owner", workspace_slug: "studio" };
+    } catch {
+      return Response.json({ ok: false, error: "Autenticação necessária" }, { status: 401, headers });
+    }
     if (!env.NOTION_TOKEN) {
-      return Response.json({ ok: false, error: "NOTION_TOKEN não configurado" }, { status: 500, headers });
+      return Response.json({ ok: false, error: "Integração com Notion indisponível" }, { status: 503, headers });
     }
 
     async function notionRequest(path, options = {}, apiVersion = NOTION_VERSION) {
@@ -113,67 +173,53 @@ export default {
       return data;
     }
 
-    try {
+    async function queryDataSource(dataSourceId, limit = 100) {
+      const data = await notionRequest(`/data_sources/${dataSourceId}/query`, {
+        method: "POST",
+        body: JSON.stringify({ page_size: Math.min(100, Math.max(1, limit)), sorts: [{ timestamp: "last_edited_time", direction: "descending" }] })
+      }, "2025-09-03");
+      return data.results || [];
+    }
 
-      if (url.pathname === "/api/reorder" && request.method === "POST") {
-        if (!env.CONTENT_STUDIO_WRITE_KEY || !env.CONTENT_STUDIO_WRITE_KEY.trim()) {
-          return Response.json({ ok: false, error: "Chave de edição não configurada no Worker" }, { status: 503, headers });
-        }
-        const payload = await request.json();
-        if (typeof payload.key !== "string" || payload.key !== env.CONTENT_STUDIO_WRITE_KEY) {
-          return Response.json({ ok: false, error: "Chave de edição inválida" }, { status: 401, headers });
-        }
-        const orderedIds = payload.orderedIds;
-        if (!Array.isArray(orderedIds) || orderedIds.length < 1 || orderedIds.length > 50 ||
-            orderedIds.some(id => typeof id !== "string") || new Set(orderedIds).size !== orderedIds.length) {
-          return Response.json({ ok: false, error: "Lista de publicações inválida" }, { status: 400, headers });
-        }
-        const current = [];
-        let cursor;
-        let more = true;
-        while (more) {
-          const query = await notionRequest(`/data_sources/${CONTENT_DATA_SOURCE_ID}/query`, {
-            method: "POST",
-            body: JSON.stringify({
-              page_size: 100,
-              ...(cursor ? { start_cursor: cursor } : {}),
-              filter: { property: "Data", date: { is_not_empty: true } }
-            })
-          }, "2025-09-03");
-          current.push(...(query.results || []));
-          more = Boolean(query.has_more);
-          cursor = query.next_cursor || undefined;
-          if (!cursor) more = false;
-        }
-        const validIds = new Set(current.map(page => page.id));
-        if (orderedIds.length !== validIds.size || orderedIds.some(id => !validIds.has(id))) {
-          return Response.json({ ok: false, error: "A lista mudou no Notion. Atualize o feed antes de salvar." }, { status: 409, headers });
-        }
-        for (let i = 0; i < orderedIds.length; i++) {
-          await notionRequest(`/pages/${orderedIds[i]}`, {
-            method: "PATCH",
-            body: JSON.stringify({ properties: { "Ordem no feed": { number: i + 1 } } })
-          });
-        }
-        return Response.json({ ok: true, updated: orderedIds.length }, { headers });
-      }
-      if (url.pathname === "/api/health") {
-        return Response.json({ ok: true, service: "content-studio-api", notionTokenConfigured: true }, { headers });
-      }
+    try {
       if (url.pathname === "/api/notion-test") {
         const data = await notionRequest("/users/me");
-        return Response.json({ ok: true, message: "Conexão com Notion funcionando", integration: data.name || "Content Studio API" }, { headers });
+        return Response.json({ ok: true, message: "Conexão com Notion funcionando", integration: data.name || "Content Studio API", workspace: workspaceMember.workspace_slug, role: workspaceMember.role }, { headers });
+      }
+      const routeParts = url.pathname.split("/").filter(Boolean);
+      const postId = routeParts.length === 3 && routeParts[0] === "api" && routeParts[1] === "post" ? routeParts[2] : "";
+      if (postId && /^[0-9a-f-]{36}$/i.test(postId)) {
+        const cursor = url.searchParams.get("cursor");
+        const query = new URLSearchParams({ page_size: "100" });
+        if (cursor && cursor.length <= 200) query.set("start_cursor", cursor);
+        const data = await notionRequest(`/blocks/${postId}/children?${query.toString()}`);
+        const content = (data.results || []).map(block => ({
+          type: block.type,
+          text: extractBlockText(block),
+          hasChildren: Boolean(block.has_children)
+        })).filter(block => block.text || block.hasChildren);
+        return Response.json({
+          ok: true,
+          content,
+          hasMore: Boolean(data.has_more),
+          nextCursor: data.next_cursor || null
+        }, { headers });
       }
       if (url.pathname === "/api/profile") {
-        const data = await notionRequest(`/databases/${PROFILE_DATABASE_ID}/query`, {
-          method: "POST",
-          body: JSON.stringify({ page_size: 1, sorts: [{ property: "Perfil", direction: "ascending" }] })
-        });
-        return Response.json({ ok: true, profile: data.results[0] ? normalizeProfile(data.results[0]) : null }, { headers });
+        const profiles = await queryDataSource(PROFILE_DATA_SOURCE_ID, 1);
+        return Response.json({ ok: true, workspace: workspaceMember.workspace_slug, profile: profiles[0] ? normalizeProfile(profiles[0]) : null }, { headers });
+      }
+      if (url.pathname === "/api/library") {
+        const items = await queryDataSource(LIBRARY_DATA_SOURCE_ID, 100);
+        return Response.json({ ok: true, workspace: workspaceMember.workspace_slug, total: items.length, items: items.map(normalizeLibraryItem) }, { headers });
+      }
+      if (url.pathname === "/api/ideas") {
+        const items = await queryDataSource(IDEAS_DATA_SOURCE_ID, 100);
+        return Response.json({ ok: true, workspace: workspaceMember.workspace_slug, total: items.length, items: items.map(normalizeIdea) }, { headers });
       }
       if (url.pathname === "/api/notion-read-test" || url.pathname === "/api/feed") {
         const requestedLimit = Number(url.searchParams.get("limit") || 50);
-        const pageSize = Math.min(50, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 50));
+        const pageSize = Math.min(MAX_FEED_ITEMS, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 50));
         const allResults = [];
         let startCursor;
         let hasMore = true;
@@ -196,7 +242,6 @@ export default {
         }
 
         const posts = allResults.map(normalizePost);
-
         return Response.json({
           ok: true,
           total: posts.length,
@@ -208,7 +253,7 @@ export default {
       return Response.json({
         service: "content-studio-api",
         status: "online",
-        endpoints: ["/api/health", "/api/notion-test", "/api/profile", "/api/feed"]
+        endpoints: ["/api/health", "/api/notion-test", "/api/profile", "/api/feed", "/api/library", "/api/ideas"]
       }, { headers });
     } catch (error) {
       return Response.json({ ok: false, error: error.message }, { status: 500, headers });
