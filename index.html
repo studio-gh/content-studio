@@ -215,7 +215,30 @@ function setView(view){
  state.view=view;$("calendarView").classList.toggle("hidden",view!=="calendar");$("feedView").classList.toggle("hidden",view!=="feed");
  document.querySelectorAll(".view-btn").forEach(btn=>{const active=btn.dataset.view===view;btn.classList.toggle("active",active);btn.setAttribute("aria-selected",active?"true":"false")});
 }
+const DEMO_MODE=new URLSearchParams(location.search).get("demo")==="1";
+function loadDemo(){
+ const base=new Date();base.setDate(1);
+ const date=(offset)=>{const d=new Date(base);d.setDate(d.getDate()+offset);return d.toISOString().slice(0,10)};
+ state.profile={name:"Marca exemplo",username:"@marca.exemplo",bio:"Uma marca fictícia para explorar o planejamento de conteúdo.",website:"",profileImage:null};
+ state.posts=[
+  {id:"demo-01",title:"Manifesto da marca",date:date(2),order:1,editorial:"Universo da marca",format:"Carrossel",status:"Aprovado",category:"Institucional",pillar:"Posicionamento",objectives:["Construir autoridade"],tags:["manifesto","marca"],previewImage:null},
+  {id:"demo-02",title:"Um detalhe do processo",date:date(5),order:2,editorial:"Bastidores",format:"Reel",status:"Em produção",category:"Processo",pillar:"Conexão",objectives:["Criar conexão"],tags:["bastidores"],previewImage:null},
+  {id:"demo-03",title:"Pergunta para a comunidade",date:date(8),order:3,editorial:"Conversa aberta",format:"Stories",status:"Ideia",category:"Interação",pillar:"Comunidade",objectives:["Gerar conversa"],tags:["pergunta"],previewImage:null},
+  {id:"demo-04",title:"Três maneiras de usar",date:date(12),order:4,editorial:"Dicas práticas",format:"Carrossel",status:"Pronto",category:"Educativo",pillar:"Valor",objectives:["Educar"],tags:["dicas"],previewImage:null},
+  {id:"demo-05",title:"A inspiração desta semana",date:date(17),order:5,editorial:"Referências",format:"Post",status:"Agendado",category:"Inspiração",pillar:"Repertório",objectives:["Inspirar"],tags:["referência"],previewImage:null},
+  {id:"demo-06",title:"Uma pequena pausa",date:date(22),order:6,editorial:"Bastidores",format:"Stories",status:"Rascunho",category:"Cotidiano",pillar:"Conexão",objectives:["Humanizar"],tags:["cotidiano"],previewImage:null}
+ ];
+ state.library=[];state.ideas=[];state.lastUpdated=new Date();
+ renderProfile(state.profile);populateFilters();render();
+ $("libraryGrid").innerHTML='<div class="empty"><strong>Biblioteca de exemplo</strong>Os materiais aparecem aqui quando forem adicionados à sua Biblioteca no Notion.</div>';
+ renderIdeas();
+ setText("syncStatus","Prévia demonstrativa · dados fictícios");
+ setText("lastUpdated","Modo de demonstração");
+ $("refresh").textContent="↻ Recarregar prévia";
+}
 async function load(){
+ if(DEMO_MODE){loadDemo();return;}
+
  const button=$("refresh");button.disabled=true;button.textContent="Atualizando…";setText("syncStatus","Sincronizando com Notion…");
  try{
   const responses=await Promise.all([fetch(API_BASE+"/api/profile",{cache:"no-store",credentials:"include"}),fetch(API_BASE+"/api/feed?limit=100",{cache:"no-store",credentials:"include"}),loadCollection("/api/library"),loadCollection("/api/ideas")]);
@@ -234,7 +257,7 @@ async function load(){
   else setText("lastUpdated","Falha na atualização. Exibindo os últimos dados carregados.");
  }finally{button.disabled=false;button.textContent="↻ Atualizar"}
 }
-$("refresh").addEventListener("click",load);
+if(DEMO_MODE){$("refresh").addEventListener("click",loadDemo);}else{$("refresh").addEventListener("click",load);}
 document.querySelectorAll(".module-btn").forEach(btn=>btn.addEventListener("click",()=>setModule(btn.dataset.module)));
 $("librarySearch").addEventListener("input",renderLibrary);$("libraryCategory").addEventListener("change",renderLibrary);$("ideasSearch").addEventListener("input",renderIdeas);$("ideasStatus").addEventListener("change",renderIdeas);
 $("openNotion").addEventListener("click",()=>window.open("https://app.notion.com/p/410029fe002881ce8bddf5237e947fc6","_blank","noopener"));
