@@ -268,7 +268,7 @@ $("nextMonth").addEventListener("click",()=>{state.month=new Date(state.month.ge
 $("thisMonth").addEventListener("click",()=>{state.month=new Date(new Date().getFullYear(),new Date().getMonth(),1);renderCalendar()});
 document.addEventListener("click",event=>{const target=event.target.closest("[data-post]");if(!target)return;const post=state.posts.find(item=>item.id===target.dataset.post);if(post)openPost(post)});
 $("closeModal").addEventListener("click",closeModal);$("closeReview").addEventListener("click",closeModal);$("previousPost").addEventListener("click",()=>moveModal(-1));$("nextPost").addEventListener("click",()=>moveModal(1));$("modal").addEventListener("click",event=>{if(event.target===$("modal"))closeModal()});document.addEventListener("keydown",event=>{if(event.key==="Escape")closeModal();else if($("modal").classList.contains("open")&&event.key==="ArrowLeft")moveModal(-1);else if($("modal").classList.contains("open")&&event.key==="ArrowRight")moveModal(1)});
-load();
+if(DEMO_MODE)loadDemo();else load();
 })();
 </script>
 </body>
