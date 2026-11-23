@@ -218,7 +218,7 @@ export default {
             (topic && !allowedTopics.includes(topic))) {
           return Response.json({ ok: false, error: "Dados inválidos. Informe um título de até 180 caracteres; anotação e origem são opcionais." }, { status: 400, headers });
         }
-        if (source && !/^https?:\\/\\//i.test(source)) {
+        if (source && !/^https?:\/\//i.test(source)) {
           return Response.json({ ok: false, error: "A origem precisa ser um link http ou https." }, { status: 400, headers });
         }
         const properties = {
