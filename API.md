@@ -29,14 +29,14 @@ Response:
 ```
 
 ### `GET /api/ideas`
-Returns the newest records from Canto das Ideias (up to 50 per request).
+Returns the newest records from Canto das Ideias (50 per request). Pass the returned `nextCursor` as the `cursor` query parameter to fetch the next page.
 
-Idea fields: `id`, `title`, `note`, `status`, `topic`, `source`, `createdAt`, `notionUrl`, `updatedAt`.
+Idea fields: `id`, `title`, `note`, `status`, `topic`, `source`, `createdAt`, `notionUrl`, `updatedAt`. Responses also include `hasMore` and `nextCursor`.
 
 ### `GET /api/assets`
-Returns the newest records from Acervo (up to 50 per request).
+Returns the newest records from Acervo (50 per request). Pass the returned `nextCursor` as the `cursor` query parameter to fetch the next page.
 
-Asset fields: `id`, `name`, `type`, `category`, `tags`, `brand`, `description`, `driveUrl`, `files`, `notionUrl`, `updatedAt`.
+Asset fields: `id`, `name`, `type`, `category`, `tags`, `brand`, `description`, `driveUrl`, `files`, `notionUrl`, `updatedAt`. Responses also include `hasMore` and `nextCursor`.
 
 ## Write endpoints
 
@@ -69,6 +69,6 @@ Existing protected endpoint for saving feed order. Requires `CONTENT_STUDIO_WRIT
 
 ## Current limitations
 
-- Ideas and assets endpoints currently return one page of up to 50 records. Cursor pagination is not implemented for these two collections yet.
+- Ideas and assets endpoints support cursor pagination, with 50 records per page.
 - Live validation against the deployed Worker and Notion is still required after deployment.
 - The Instagram preview HTML is intentionally frozen and is not part of this API change.
