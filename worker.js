@@ -199,6 +199,44 @@ export default {
         const data = await notionRequest("/users/me");
         return Response.json({ ok: true, message: "Conexão com Notion funcionando", integration: data.name || "Content Studio API" }, { headers });
       }
+      if (url.pathname === "/api/ideas" && request.method === "POST") {
+        if (!env.CONTENT_STUDIO_WRITE_KEY || !env.CONTENT_STUDIO_WRITE_KEY.trim()) {
+          return Response.json({ ok: false, error: "Chave de edição não configurada no Worker" }, { status: 503, headers });
+        }
+        let payload;
+        try { payload = await request.json(); }
+        catch { return Response.json({ ok: false, error: "Corpo JSON inválido" }, { status: 400, headers }); }
+        if (typeof payload.key !== "string" || payload.key !== env.CONTENT_STUDIO_WRITE_KEY) {
+          return Response.json({ ok: false, error: "Chave de edição inválida" }, { status: 401, headers });
+        }
+        const title = typeof payload.title === "string" ? payload.title.trim() : "";
+        const note = typeof payload.note === "string" ? payload.note.trim() : "";
+        const topic = typeof payload.topic === "string" ? payload.topic.trim() : "";
+        const source = typeof payload.source === "string" ? payload.source.trim() : "";
+        const allowedTopics = ["Design", "Tecnologia", "Arte", "Cultura", "Negócios", "Pessoal"];
+        if (!title || title.length > 180 || note.length > 2000 || source.length > 2000 ||
+            (topic && !allowedTopics.includes(topic))) {
+          return Response.json({ ok: false, error: "Dados inválidos. Informe um título de até 180 caracteres; anotação e origem são opcionais." }, { status: 400, headers });
+        }
+        if (source && !/^https?:\\/\\//i.test(source)) {
+          return Response.json({ ok: false, error: "A origem precisa ser um link http ou https." }, { status: 400, headers });
+        }
+        const properties = {
+          "Ideia": { title: [{ text: { content: title } }] },
+          "Status": { status: { name: "Nova" } }
+        };
+        if (note) properties["Anotação"] = { rich_text: [{ text: { content: note } }] };
+        if (topic) properties["Tema"] = { select: { name: topic } };
+        if (source) properties["Origem"] = { url: source };
+        const created = await notionRequest("/pages", {
+          method: "POST",
+          body: JSON.stringify({
+            parent: { type: "data_source_id", data_source_id: IDEAS_DATA_SOURCE_ID },
+            properties
+          })
+        }, "2025-09-03");
+        return Response.json({ ok: true, idea: normalizeIdea(created) }, { status: 201, headers });
+      }
       if (url.pathname === "/api/ideas") {
         const data = await notionRequest(`/data_sources/${IDEAS_DATA_SOURCE_ID}/query`, {
           method: "POST",
