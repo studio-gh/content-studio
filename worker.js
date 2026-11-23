@@ -206,6 +206,9 @@ export default {
         let payload;
         try { payload = await request.json(); }
         catch { return Response.json({ ok: false, error: "Corpo JSON inválido" }, { status: 400, headers }); }
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+          return Response.json({ ok: false, error: "Corpo da requisição inválido" }, { status: 400, headers });
+        }
         if (typeof payload.key !== "string" || payload.key !== env.CONTENT_STUDIO_WRITE_KEY) {
           return Response.json({ ok: false, error: "Chave de edição inválida" }, { status: 401, headers });
         }
