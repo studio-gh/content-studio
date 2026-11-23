@@ -1,6 +1,8 @@
 const NOTION_VERSION = "2022-06-28";
 
 const CONTENT_DATA_SOURCE_ID = "68e086ed-8655-413f-aca0-53fe36ad82e0";
+const IDEAS_DATA_SOURCE_ID = "ec75898c-2fbc-4d40-8be0-19f8e3ac01bb";
+const ASSETS_DATA_SOURCE_ID = "3d40dbe6-469b-44ef-b678-8fa30f9ce7f2";
 const PROFILE_DATABASE_ID = "bd79b8d1f3194107bb7a173511604c54";
 
 function getText(property) {
@@ -56,6 +58,39 @@ function normalizePost(page) {
     tags: getMultiSelect(p["Tags"]),
     previewImage: files[0]?.url || null,
     previewFiles: files,
+    notionUrl: page.url,
+    updatedAt: page.last_edited_time
+  };
+}
+
+function normalizeIdea(page) {
+  const p = page.properties || {};
+  return {
+    id: page.id,
+    title: getText(p["Ideia"]) || "Ideia sem título",
+    note: getText(p["Anotação"]),
+    status: getText(p["Status"]) || "Nova",
+    topic: getText(p["Tema"]),
+    source: getText(p["Origem"]),
+    createdAt: p["Criada em"]?.date?.start || page.created_time,
+    notionUrl: page.url,
+    updatedAt: page.last_edited_time
+  };
+}
+
+function normalizeAsset(page) {
+  const p = page.properties || {};
+  const files = getFiles(p["Arquivo"]);
+  return {
+    id: page.id,
+    name: getText(p["Nome"]) || "Material sem título",
+    type: getText(p["Tipo"]),
+    category: getText(p["Categoria"]),
+    tags: getMultiSelect(p["Tags"]),
+    brand: getText(p["Marca"]),
+    description: getText(p["Descrição"]),
+    driveUrl: getPropertyValue(p["Link do Drive"]),
+    files,
     notionUrl: page.url,
     updatedAt: page.last_edited_time
   };
@@ -164,6 +199,28 @@ export default {
         const data = await notionRequest("/users/me");
         return Response.json({ ok: true, message: "Conexão com Notion funcionando", integration: data.name || "Content Studio API" }, { headers });
       }
+      if (url.pathname === "/api/ideas") {
+        const data = await notionRequest(`/data_sources/${IDEAS_DATA_SOURCE_ID}/query`, {
+          method: "POST",
+          body: JSON.stringify({
+            page_size: 50,
+            sorts: [{ timestamp: "created_time", direction: "descending" }]
+          })
+        }, "2025-09-03");
+        const ideas = (data.results || []).map(normalizeIdea);
+        return Response.json({ ok: true, total: ideas.length, hasMore: Boolean(data.has_more), ideas }, { headers });
+      }
+      if (url.pathname === "/api/assets") {
+        const data = await notionRequest(`/data_sources/${ASSETS_DATA_SOURCE_ID}/query`, {
+          method: "POST",
+          body: JSON.stringify({
+            page_size: 50,
+            sorts: [{ timestamp: "created_time", direction: "descending" }]
+          })
+        }, "2025-09-03");
+        const assets = (data.results || []).map(normalizeAsset);
+        return Response.json({ ok: true, total: assets.length, hasMore: Boolean(data.has_more), assets }, { headers });
+      }
       if (url.pathname === "/api/profile") {
         const data = await notionRequest(`/databases/${PROFILE_DATABASE_ID}/query`, {
           method: "POST",
@@ -208,7 +265,7 @@ export default {
       return Response.json({
         service: "content-studio-api",
         status: "online",
-        endpoints: ["/api/health", "/api/notion-test", "/api/profile", "/api/feed"]
+        endpoints: ["/api/health", "/api/notion-test", "/api/profile", "/api/feed", "/api/ideas", "/api/assets"]
       }, { headers });
     } catch (error) {
       return Response.json({ ok: false, error: error.message }, { status: 500, headers });
