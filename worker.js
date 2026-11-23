@@ -240,27 +240,27 @@ export default {
         }, "2025-09-03");
         return Response.json({ ok: true, idea: normalizeIdea(created) }, { status: 201, headers });
       }
-      if (url.pathname === "/api/ideas") {
-        const data = await notionRequest(`/data_sources/${IDEAS_DATA_SOURCE_ID}/query`, {
+      if (url.pathname === "/api/ideas" || url.pathname === "/api/assets") {
+        const isIdeas = url.pathname === "/api/ideas";
+        const dataSourceId = isIdeas ? IDEAS_DATA_SOURCE_ID : ASSETS_DATA_SOURCE_ID;
+        const cursor = url.searchParams.get("cursor");
+        const data = await notionRequest(`/data_sources/${dataSourceId}/query`, {
           method: "POST",
           body: JSON.stringify({
             page_size: 50,
+            ...(cursor ? { start_cursor: cursor } : {}),
             sorts: [{ timestamp: "created_time", direction: "descending" }]
           })
         }, "2025-09-03");
-        const ideas = (data.results || []).map(normalizeIdea);
-        return Response.json({ ok: true, total: ideas.length, hasMore: Boolean(data.has_more), ideas }, { headers });
-      }
-      if (url.pathname === "/api/assets") {
-        const data = await notionRequest(`/data_sources/${ASSETS_DATA_SOURCE_ID}/query`, {
-          method: "POST",
-          body: JSON.stringify({
-            page_size: 50,
-            sorts: [{ timestamp: "created_time", direction: "descending" }]
-          })
-        }, "2025-09-03");
-        const assets = (data.results || []).map(normalizeAsset);
-        return Response.json({ ok: true, total: assets.length, hasMore: Boolean(data.has_more), assets }, { headers });
+        const records = (data.results || []).map(isIdeas ? normalizeIdea : normalizeAsset);
+        const response = {
+          ok: true,
+          total: records.length,
+          hasMore: Boolean(data.has_more),
+          nextCursor: data.next_cursor || null
+        };
+        response[isIdeas ? "ideas" : "assets"] = records;
+        return Response.json(response, { headers });
       }
       if (url.pathname === "/api/profile") {
         const data = await notionRequest(`/databases/${PROFILE_DATABASE_ID}/query`, {
