@@ -1,0 +1,25 @@
+name: Validate Content Studio Worker
+
+on:
+  pull_request:
+    paths:
+      - "worker.js"
+      - ".github/workflows/validate-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    name: JavaScript syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate Worker module syntax
+        run: node --check --input-type=module < worker.js

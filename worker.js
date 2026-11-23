@@ -1,6 +1,8 @@
 const NOTION_VERSION = "2022-06-28";
 
 const CONTENT_DATA_SOURCE_ID = "68e086ed-8655-413f-aca0-53fe36ad82e0";
+const IDEAS_DATA_SOURCE_ID = "ec75898c-2fbc-4d40-8be0-19f8e3ac01bb";
+const ASSETS_DATA_SOURCE_ID = "3d40dbe6-469b-44ef-b678-8fa30f9ce7f2";
 const PROFILE_DATABASE_ID = "bd79b8d1f3194107bb7a173511604c54";
 
 function getText(property) {
@@ -56,6 +58,39 @@ function normalizePost(page) {
     tags: getMultiSelect(p["Tags"]),
     previewImage: files[0]?.url || null,
     previewFiles: files,
+    notionUrl: page.url,
+    updatedAt: page.last_edited_time
+  };
+}
+
+function normalizeIdea(page) {
+  const p = page.properties || {};
+  return {
+    id: page.id,
+    title: getText(p["Ideia"]) || "Ideia sem título",
+    note: getText(p["Anotação"]),
+    status: getText(p["Status"]) || "Nova",
+    topic: getText(p["Tema"]),
+    source: getText(p["Origem"]),
+    createdAt: p["Criada em"]?.date?.start || page.created_time,
+    notionUrl: page.url,
+    updatedAt: page.last_edited_time
+  };
+}
+
+function normalizeAsset(page) {
+  const p = page.properties || {};
+  const files = getFiles(p["Arquivo"]);
+  return {
+    id: page.id,
+    name: getText(p["Nome"]) || "Material sem título",
+    type: getText(p["Tipo"]),
+    category: getText(p["Categoria"]),
+    tags: getMultiSelect(p["Tags"]),
+    brand: getText(p["Marca"]),
+    description: getText(p["Descrição"]),
+    driveUrl: getPropertyValue(p["Link do Drive"]),
+    files,
     notionUrl: page.url,
     updatedAt: page.last_edited_time
   };
@@ -164,6 +199,69 @@ export default {
         const data = await notionRequest("/users/me");
         return Response.json({ ok: true, message: "Conexão com Notion funcionando", integration: data.name || "Content Studio API" }, { headers });
       }
+      if (url.pathname === "/api/ideas" && request.method === "POST") {
+        if (!env.CONTENT_STUDIO_WRITE_KEY || !env.CONTENT_STUDIO_WRITE_KEY.trim()) {
+          return Response.json({ ok: false, error: "Chave de edição não configurada no Worker" }, { status: 503, headers });
+        }
+        let payload;
+        try { payload = await request.json(); }
+        catch { return Response.json({ ok: false, error: "Corpo JSON inválido" }, { status: 400, headers }); }
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+          return Response.json({ ok: false, error: "Corpo da requisição inválido" }, { status: 400, headers });
+        }
+        if (typeof payload.key !== "string" || payload.key !== env.CONTENT_STUDIO_WRITE_KEY) {
+          return Response.json({ ok: false, error: "Chave de edição inválida" }, { status: 401, headers });
+        }
+        const title = typeof payload.title === "string" ? payload.title.trim() : "";
+        const note = typeof payload.note === "string" ? payload.note.trim() : "";
+        const topic = typeof payload.topic === "string" ? payload.topic.trim() : "";
+        const source = typeof payload.source === "string" ? payload.source.trim() : "";
+        const allowedTopics = ["Design", "Tecnologia", "Arte", "Cultura", "Negócios", "Pessoal"];
+        if (!title || title.length > 180 || note.length > 2000 || source.length > 2000 ||
+            (topic && !allowedTopics.includes(topic))) {
+          return Response.json({ ok: false, error: "Dados inválidos. Informe um título de até 180 caracteres; anotação e origem são opcionais." }, { status: 400, headers });
+        }
+        if (source && !/^https?:\/\//i.test(source)) {
+          return Response.json({ ok: false, error: "A origem precisa ser um link http ou https." }, { status: 400, headers });
+        }
+        const properties = {
+          "Ideia": { title: [{ text: { content: title } }] },
+          "Status": { status: { name: "Nova" } }
+        };
+        if (note) properties["Anotação"] = { rich_text: [{ text: { content: note } }] };
+        if (topic) properties["Tema"] = { select: { name: topic } };
+        if (source) properties["Origem"] = { url: source };
+        const created = await notionRequest("/pages", {
+          method: "POST",
+          body: JSON.stringify({
+            parent: { type: "data_source_id", data_source_id: IDEAS_DATA_SOURCE_ID },
+            properties
+          })
+        }, "2025-09-03");
+        return Response.json({ ok: true, idea: normalizeIdea(created) }, { status: 201, headers });
+      }
+      if (url.pathname === "/api/ideas" || url.pathname === "/api/assets") {
+        const isIdeas = url.pathname === "/api/ideas";
+        const dataSourceId = isIdeas ? IDEAS_DATA_SOURCE_ID : ASSETS_DATA_SOURCE_ID;
+        const cursor = url.searchParams.get("cursor");
+        const data = await notionRequest(`/data_sources/${dataSourceId}/query`, {
+          method: "POST",
+          body: JSON.stringify({
+            page_size: 50,
+            ...(cursor ? { start_cursor: cursor } : {}),
+            sorts: [{ timestamp: "created_time", direction: "descending" }]
+          })
+        }, "2025-09-03");
+        const records = (data.results || []).map(isIdeas ? normalizeIdea : normalizeAsset);
+        const response = {
+          ok: true,
+          total: records.length,
+          hasMore: Boolean(data.has_more),
+          nextCursor: data.next_cursor || null
+        };
+        response[isIdeas ? "ideas" : "assets"] = records;
+        return Response.json(response, { headers });
+      }
       if (url.pathname === "/api/profile") {
         const data = await notionRequest(`/databases/${PROFILE_DATABASE_ID}/query`, {
           method: "POST",
@@ -208,7 +306,7 @@ export default {
       return Response.json({
         service: "content-studio-api",
         status: "online",
-        endpoints: ["/api/health", "/api/notion-test", "/api/profile", "/api/feed"]
+        endpoints: ["/api/health", "/api/notion-test", "/api/profile", "/api/feed", "/api/ideas", "/api/assets"]
       }, { headers });
     } catch (error) {
       return Response.json({ ok: false, error: error.message }, { status: 500, headers });
